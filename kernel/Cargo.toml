@@ -1,0 +1,27 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+lto = true
+
+[features]
+default = []
+bsp_rpi3 = []
+bsp_rpi4 = []
+
+[[bin]]
+name = "kernel"
+path = "src/main.rs"
+
+##--------------------------------------------------------------------------------------------------
+## Dependencies
+##--------------------------------------------------------------------------------------------------
+
+[dependencies]
+
+# Platform specific dependencies
+cortex-a = { version = "7.x.x" }
+log= "0.4"
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
