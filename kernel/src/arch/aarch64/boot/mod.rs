@@ -14,14 +14,24 @@
 // Assembly counterpart to this file.
 core::arch::global_asm!(include_str!("boot.s"));
 
-//--------------------------------------------------------------------------------------------------
-// Public Code
-//--------------------------------------------------------------------------------------------------
 
-/// The Rust entry of the `kernel` binary.
-///
-/// The function is called from the assembly `_start` function.
 #[no_mangle]
-pub unsafe fn _start_rust() -> ! {
-    crate::kernel_init()
+#[link_section = ".text.boot"]
+extern "C" fn clear_bss() {
+    let start = sbss as usize;
+    let end = ebss as usize;
+    let step = core::mem::size_of::<usize>();
+    for i in (start..end).step_by(step) {
+        unsafe { (i as *mut usize).write(0) };
+    }
+}
+
+extern "C" {
+    fn sbss();
+    fn ebss();
+    fn page_table_lvl4();
+    fn page_table_lvl3();
+    fn page_table_lvl2();
+    fn _start();
+    fn _end();
 }
