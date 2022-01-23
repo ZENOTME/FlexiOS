@@ -3,38 +3,35 @@ ADDR_BASE = 0x80000;
 ENTRY(_start)
 SECTIONS {
   
-  . = ADDR_BASE; /* Load the kernel at this address. */
-  .init : {
+  . = ADDR_BASE+KERNEL_BASE; /* Load the kernel at this address. */
+  .init : AT(ADDR_BASE){
     sinit = .;
     *(.text.boot)
-  }
-  .init_data : {
-    *(.stack.boot)
   }
   . = ALIGN(4K);
   einit = ABSOLUTE(.);
   skernel = einit;
 
-  .text KERNEL_BASE+skernel: AT(skernel){
-    stext = .-KERNEL_BASE;
+  .text : {
+    stext = .;
     
     *(.text .text.* .gnu.linkonce.t*)
     . = ALIGN(4K);
-    etext = .-KERNEL_BASE;
+    etext = .;
   }
 
   .rodata : {
-    srodata = .-KERNEL_BASE;
+    srodata = .;
     *(.rodata .rodata.* .gnu.linkonce.r*)
     . = ALIGN(4K);
-    erodata = .-KERNEL_BASE;
+    erodata = .;
   }
 
   .data : {
-    sdata = .-KERNEL_BASE;
+    sdata = .;
     *(.data .data.* .gnu.linkonce.d*)
     . = ALIGN(4K);
-    edata = .-KERNEL_BASE;
+    edata = .;
   }
 
   .stack : {
@@ -44,15 +41,15 @@ SECTIONS {
 
   .bss : {
     . = ALIGN(32);
-    sbss = .-KERNEL_BASE;
+    sbss = .;
     *(.bss .bss.*)
     *(COMMON)
     . = ALIGN(4K);
-    ebss = .-KERNEL_BASE;
+    ebss = .;
   }
 
   /* end of the binary */
-  ekernel = ALIGN(8)-KERNEL_BASE;
+  ekernel = ALIGN(8);
 
   /DISCARD/ : { *(.comment) *(.gnu*) *(.note*) *(.eh_frame*) }
 }

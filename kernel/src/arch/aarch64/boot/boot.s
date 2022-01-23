@@ -21,6 +21,7 @@ halt:
     b       halt
 
 # switch to EL1, setup system registers of other EL
+# and set the temporary stack for low address 
 el_setup:
     # use SP_ELx for Exception level ELx
     msr     SPsel, #1
@@ -35,10 +36,18 @@ switch_to_el2:
     beq     switch_to_el1
 
     # at EL3
+	# 0 non-secure state
+	# 4 5 RESET1
+	# 7 DISABLE SECURE INS
+	# 8 DISABLE HYPERVISIOR CALL
+	# 10 SET EL2 EL1 TO AARCH64  
     # set-up SCR_EL3 (bits 0, 4, 5, 7, 8, 10) (A53: 4.3.42)
     mov     x0, #0x5b1
     msr     scr_el3, x0
 
+	# 0 AARCH64
+	# 3 RETURN TO EL2
+	# 6789 DISABLE DAIF
     # set-up SPSR_EL3 (bits 0, 3, 6, 7, 8, 9) (ref: C5.2.20)
     mov     x0, #0x3c9
     msr     spsr_el3, x0
@@ -80,7 +89,7 @@ switch_to_el1:
     mov     x0, #0x3c5
     msr     spsr_el2, x0
 
-    # enable CNTP for EL1/EL0 (ref: D7.5.2, D7.5.13)
+    # DIABLE EL1 TIMER TRAPS
     # NOTE: This doesn't actually enable the counter stream.
     mrs     x0, cnthctl_el2
     orr     x0, x0, #3
@@ -88,6 +97,7 @@ switch_to_el1:
     msr     cntvoff_el2, xzr
 
     # switch
+	# lr is the link register stores the return address
     msr     elr_el2, lr
     eret
 el_setup_end:
@@ -130,6 +140,7 @@ jump_to_main:
 bootstack:
     .space 0x100000 // 1M
 bootstacktop:
+
 
 .section .data
 .align 12
