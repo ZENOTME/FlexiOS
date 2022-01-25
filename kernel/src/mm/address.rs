@@ -1,7 +1,6 @@
 use crate::arch::mm::{PA_WIDTH,VA_WIDTH};
 use core::fmt::{self, Debug, Formatter};
-use page::PageSize;
-
+use core::ops::{Add,AddAssign,Sub,SubAssign};
 
 /// Definitions
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -44,30 +43,101 @@ impl From<VirtAddr> for usize {
 
 // Address Caculate
 impl VirtAddr {
-    pub fn floor<U:Into<u64>>(&self,align:U) -> VirtAddr { 
-        VirtAddr(self.0 / align.into()) 
+    pub fn floor<U:Into<usize>>(&self,align:U) -> VirtAddr { 
+        VirtAddr(floor(self.0,align.into()))
     }
-    pub fn ceil<U:Into<u64>>(&self,align:U) -> VirtAddr  { 
-        VirtAddr((self.0 - 1 + align.into()) / align.into()) 
+    pub fn ceil<U:Into<usize>>(&self,align:U) -> VirtAddr  { 
+        VirtAddr(ceil(self.0,align.into()))
     }
-    pub fn page_offset<U:Into<u64>>(&self,align:U) -> usize { 
+    pub fn page_offset<U:Into<usize>>(&self,align:U) -> usize { 
         self.0 & (align.into() - 1) 
     }
-    pub fn aligned(&self) -> bool { self.page_offset() == 0 }
+    pub fn aligned<U:Into<usize>>(&self,align:U) -> bool { 
+        self.page_offset(align) == 0 
+    }
 }
 
 impl PhysAddr {
-    pub fn floor<U:Into<u64>>(&self,align:U) -> PhysPageNum { 
-        PhysPageNum(self.0 / align.into()) 
+    pub fn floor<U:Into<usize>>(&self,align:U) -> PhysAddr { 
+        PhysAddr(floor(self.0,align.into()))
     }
-    pub fn ceil<U:Into<u64>>(&self,align:U) -> PhysPageNum { 
-        PhysPageNum((self.0 - 1 + align.into()) / align.into()) 
+    pub fn ceil<U:Into<usize>>(&self,align:U) -> PhysAddr { 
+        PhysAddr(ceil(self.0,align.into()))
     }
-    pub fn page_offset<U:Into<u64>>(&self,align:U) -> usize { 
+    pub fn page_offset<U:Into<usize>>(&self,align:U) -> usize { 
         self.0 & (align.into() - 1) 
     }
-    pub fn aligned(&self) -> bool {
-         self.page_offset() == 0 
+    pub fn aligned<U:Into<usize>>(&self,align:U) -> bool { 
+        self.page_offset(align) == 0 
     }
 }
 
+#[inline]
+pub fn floor(addr:usize,align:usize)->usize{
+    debug_assert!(align.is_power_of_two(), "`align` must be a power of two");
+    addr & !(align-1)
+}
+#[inline]
+pub fn ceil(addr: usize, align: usize) -> usize {
+    debug_assert!(align.is_power_of_two(), "`align` must be a power of two");
+    let align_mask = align - 1;
+    if addr & align_mask == 0 {
+        addr // already aligned
+    } else {
+        (addr | align_mask) + 1
+    }
+}
+
+
+impl Add<usize> for VirtAddr {
+    type Output = Self;
+    fn add(self, rhs: usize) -> VirtAddr {
+        VirtAddr::from(self.0 + rhs)
+    }
+}
+
+impl AddAssign<usize> for VirtAddr {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<usize> for VirtAddr {
+    type Output = Self;
+    fn sub(self, rhs: usize) -> Self::Output {
+        VirtAddr::from(self.0.checked_sub(rhs).unwrap())
+    }
+}
+
+impl SubAssign<usize> for VirtAddr {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
+
+
+impl Add<usize> for PhysAddr {
+    type Output = Self;
+    fn add(self, rhs: usize) -> Self::Output {
+        PhysAddr::from(self.0 + rhs)
+    }
+}
+
+impl AddAssign<usize> for PhysAddr {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<usize> for PhysAddr {
+    type Output = Self;
+    fn sub(self, rhs: usize) -> Self::Output {
+        PhysAddr::from(self.0.checked_sub(rhs).unwrap())
+    }
+}
+
+impl SubAssign<usize> for PhysAddr {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
