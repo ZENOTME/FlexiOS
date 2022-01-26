@@ -3,10 +3,9 @@ use core::{
     ops::{Index,IndexMut}
 };
 use tock_registers::{register_bitfields,fields::FieldValue};
-use crate::mm::address::*;
+use crate::mm::{address::*, page_mode::PhysPageNum};
 use crate::mm::frame::PhysFrame;
-use crate::mm::page::PageSize;
-use super::page::Size4KiB;
+use super::page::{PageSize,Size4KiB};
 
 register_bitfields! [
     u64,
@@ -128,33 +127,22 @@ impl PageTableEntry {
     pub fn is_valid(&self) -> bool{
         self.flags().matches_any(PageTableFlags::VALID::SET.value)
     }
-    
-    pub fn frame(&self) -> Result<PhysFrame, FrameError> {
-        if !self.is_valid() {
-            Err(FrameError::FrameNotPresent)
-        } else if self.is_block(){
-            Err(FrameError::HugeFrame)
-        }else {
-            Ok(PhysFrame::containing_address(self.addr()))
-        }
-    }
 
     /// Map the entry to the specified physical address with the specified flags.
-    pub fn set_addr(&mut self, addr: PhysAddr, flags: PageTableFlagsField) {
-        debug_assert!(addr.aligned(Size4KiB::SIZE));
-        let t:usize=addr.into();
+    fn set_ppn(&mut self, ppn: PhysPageNum, flags: PageTableFlagsField) {
+        let t:usize=ppn.0<<12;
         self.entry = (t as u64)|flags.value ;
     }
     /// Map the entry to the specified physical frame with the specified flags.
-    pub fn set_frame(&mut self, frame: PhysFrame, flags: PageTableFlagsField) {
+    pub fn set_frame(&mut self, ppn: PhysPageNum, flags: PageTableFlagsField) {
         // is not a block
         debug_assert!(flags.matches_any(PageTableFlags::TABLE_OR_BLOCK::SET.value));
-        self.set_addr(frame.start_address(), flags);
+        self.set_ppn(ppn, flags);
     }
-    pub fn set_block<S:PageSize>(&mut self,addr:PhysAddr,flags: PageTableFlagsField){
+    pub fn set_block(&mut self,ppn:PhysPageNum,flags: PageTableFlagsField){
         // is a block
         debug_assert!(!flags.matches_any(PageTableFlags::TABLE_OR_BLOCK::SET.value));
-        self.set_addr(addr, flags);
+        self.set_ppn(ppn, flags);
     }
     pub fn set_flags(&mut self,flags:PageTableFlagsField){
         self.entry = (self.entry & !PGFLAG_MASK) | flags.value;

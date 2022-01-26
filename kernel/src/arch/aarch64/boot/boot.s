@@ -126,7 +126,7 @@ slave_startup:
 
 # set-up kernel stack, jump to master_main/others_main
 jump_to_main:
-    #msr     ttbr0_el1, xzr
+    # msr     ttbr0_el1, xzr
     ldr     x8, =bootstacktop
     sub     x8, x8, x19, lsl #18
     mov     sp, x8

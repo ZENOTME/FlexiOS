@@ -32,7 +32,7 @@ pub mod logging;
 mod panic_wait;
 mod consts;
 mod mm;
-
+pub mod up;
 /// Early init code.
 ///
 /// # Safety

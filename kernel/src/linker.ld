@@ -49,7 +49,8 @@ SECTIONS {
   }
 
   /* end of the binary */
-  ekernel = ALIGN(8);
+  . = ALIGN(4K);
+  ekernel = .-KERNEL_BASE;
 
   /DISCARD/ : { *(.comment) *(.gnu*) *(.note*) *(.eh_frame*) }
 }
