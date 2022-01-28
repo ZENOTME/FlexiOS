@@ -84,6 +84,7 @@ pub enum FrameError {
 #[repr(transparent)]
 pub struct PageTableEntry {
     entry: u64,
+    
 }
 
 impl PageTableEntry {

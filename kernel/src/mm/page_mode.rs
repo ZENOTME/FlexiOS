@@ -45,12 +45,12 @@ pub trait PageMode: Copy {
     type Flags : Clone;
     // 创建页表时，把它的所有条目设置为无效条目
     fn init_page_table(table: &mut Self::PageTable);
+    // check is the entry valid
+    fn is_entry_valid(entry: &mut Self::Entry)->bool;
     // 建立一个到子页表
     fn set_table(entry: &mut Self::Entry, ppn: PhysPageNum);
-    // 建立一个Huge Page
-    fn set_block(entry: &mut Self::Entry, ppn: PhysPageNum, flags: Self::Flags);
     // Build a frame
-    fn set_frame(entry: &mut Self::Entry, ppn: PhysPageNum, flags: Self::Flags);
+    fn set_frame(entry: &mut Self::Entry, ppn: PhysPageNum, level: PageLevel,flags: Self::Flags);
     // set flag
     fn set_flags(entry: &mut Self::Entry, flags: Self::Flags);
     // 得到一个页表项目包含的物理页号

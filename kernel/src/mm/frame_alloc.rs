@@ -16,7 +16,7 @@ pub struct FrameAllocError;
 /// FramBox represent the ownership of the frame
 /// Use a allocatord to create a frame
 /// ------------------------
-//#[derive(Debug)]
+#[derive(Debug)]
 pub struct FrameBox<A: FrameAllocator = StackFrameAllocator,M:PageMode=defaultMode> {
     frame: PhysFrame<M>, // 相当于*mut类型的指针
     frame_alloc: A,
@@ -27,7 +27,7 @@ impl<A: FrameAllocator> FrameBox<A> {
         let ppn = frame_alloc.allocate_frame()?;
         Ok(FrameBox { frame: PhysFrame::new(ppn), frame_alloc })
     }
-    fn phys_page_num(&self) -> PhysPageNum {
+    pub fn phys_page_num(&self) -> PhysPageNum {
         self.frame.ppn()
     }
 }
@@ -42,7 +42,7 @@ impl<A: FrameAllocator,M: PageMode> Drop for FrameBox<A,M> {
 /// -----------------------
 /// A simple stack allocator
 /// ------------------------
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct StackFrameAllocator {
     current: PhysPageNum,
     end: PhysPageNum,

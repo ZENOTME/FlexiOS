@@ -12,6 +12,7 @@
 #![feature(const_fn_trait_bound)]
 #![feature(llvm_asm)]
 #![feature(asm)]
+#![feature(step_trait)]
 
 extern crate alloc;
 #[macro_use]
@@ -43,6 +44,6 @@ pub fn kmain() -> ! {
     println!("[1] Initing...");
     mm::init();
     println!("[2] Testing...");
-    
-    panic!("Stopping here.")
+    mm::solve_test();
+    panic!("Close OS!")
 }

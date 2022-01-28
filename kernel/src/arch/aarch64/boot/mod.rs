@@ -87,7 +87,7 @@ extern "C" fn create_init_paging() {
     map_2mib(
         p2,
         0,
-        PERIPHERALS_START,
+        0x3E00_0000,//PERIPHERALS_START,
         block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET
     );
     // device memory (0x3F00_0000 ~ 0x4000_0000)

@@ -11,7 +11,7 @@ use core::{
 use super::page_mode::*;
 
 /// A physical memory frame.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord,Debug)]
 #[repr(C)]
 pub struct PhysFrame<M: PageMode=defaultMode> {
     ppn : PhysPageNum,
@@ -77,3 +77,4 @@ impl<M: PageMode> PhysFrameRange<M> {
         start..end
     }
 }
+
