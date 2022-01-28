@@ -3,9 +3,9 @@ use core::{
     ops::{Index,IndexMut}
 };
 use tock_registers::{register_bitfields,fields::FieldValue};
-use crate::mm::{address::*, page_mode::PhysPageNum};
-use crate::mm::frame::PhysFrame;
-use super::page::{PageSize,Size4KiB};
+
+use crate::mm_type::{PhysAddr, PhysPageNum};
+
 
 register_bitfields! [
     u64,

@@ -9,12 +9,12 @@
 pub mod board;
 pub mod consts;
 pub mod cpu;
-pub mod mm;
+pub mod mm_type;
 pub mod paging;
 mod boot;
 
 
-pub use mm::*;
+pub use mm_type::*;
 /// The entry point of kernel
 #[no_mangle] // don't mangle the name of this function
 pub extern "C" fn master_main() -> ! {

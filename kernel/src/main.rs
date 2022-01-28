@@ -14,6 +14,8 @@
 #![feature(asm)]
 #![feature(step_trait)]
 
+use crate::heap_allocator::init_heap;
+
 extern crate alloc;
 #[macro_use]
 extern crate log;
@@ -32,8 +34,11 @@ pub mod arch;
 pub mod logging;
 mod panic_wait;
 mod consts;
-mod mm;
-pub mod up;
+mod up;
+mod mm_type;
+mod frame_allocator;
+mod heap_allocator;
+mod addr_space;
 /// Early init code.
 ///
 /// # Safety
@@ -42,8 +47,8 @@ pub mod up;
 pub fn kmain() -> ! {
     println!("[0] Hello My OS!");
     println!("[1] Initing...");
-    mm::init();
+    heap_allocator::init_heap();
     println!("[2] Testing...");
-    mm::solve_test();
+    addr_space::test_solve();
     panic!("Close OS!")
 }

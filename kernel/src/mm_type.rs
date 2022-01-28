@@ -1,8 +1,16 @@
-use crate::arch::mm::{PA_WIDTH,VA_WIDTH};
 use core::fmt::{self, Debug, Formatter};
 use core::ops::{Add,AddAssign,Sub,SubAssign};
+use crate::frame_allocator::CurrentFrameAllocator;
+/// Re-export the mm_type const
+pub use crate::arch::mm_type::{
+    PAGE_SIZE,PAGE_SIZE_BITS,PA_WIDTH,VA_WIDTH,KERNEL_BASE
+};
+pub use crate::arch::board::MEMORY_END;
+pub use crate::arch::paging::PageTableFlags;
 
-/// Definitions
+/// ---------------
+/// Addr Definitions
+/// ---------------
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PhysAddr(pub usize);
 
@@ -11,7 +19,6 @@ pub struct VirtAddr(pub usize);
 
 
 /// Debugging
-
 impl Debug for VirtAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("VA:{:#x}", self.0))
@@ -141,3 +148,86 @@ impl SubAssign<usize> for PhysAddr {
         *self = *self - rhs;
     }
 }
+
+pub fn phys_to_virt(paddr:PhysAddr)->VirtAddr{
+    let t=usize::from(paddr);
+    VirtAddr(t.checked_add(KERNEL_BASE).unwrap())
+}
+pub fn virt_to_phys(vaddr:VirtAddr)->PhysAddr{
+    let t=usize::from(vaddr);
+    PhysAddr(t.checked_sub(KERNEL_BASE).unwrap())
+}
+
+/// ------------
+/// PageNum Definition
+/// ------------
+#[derive(Copy, Clone, PartialEq,PartialOrd, Eq, Debug,Ord)]
+pub struct PhysPageNum(pub usize);
+
+impl PhysPageNum {
+    pub fn addr(&self) -> PhysAddr {
+        PhysAddr(self.0 << PAGE_SIZE_BITS)
+    }
+    pub fn new(paddr:PhysAddr)->Self{
+        PhysPageNum(paddr.0>>PAGE_SIZE_BITS)
+    }
+    pub fn next_page(&self) -> PhysPageNum {
+        // PhysPageNum不处理具体架构的PPN_BITS，它的合法性由具体架构保证
+        PhysPageNum(self.0.wrapping_add(1))
+    }
+    pub fn is_within_range(&self, begin: PhysPageNum, end: PhysPageNum) -> bool {
+        if begin.0 <= end.0 {
+            begin.0 <= self.0 && self.0 < end.0
+        } else {
+            begin.0 <= self.0 || self.0 < end.0
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq,PartialOrd, Eq, Debug,Ord)]
+pub struct VirtPageNum(pub usize);
+
+impl VirtPageNum {
+    pub fn addr(&self) -> VirtPageNum {
+        VirtPageNum(self.0 << PAGE_SIZE_BITS)
+    }
+    pub fn new(vaddr:VirtAddr)->Self{
+        Self(vaddr.0>>PAGE_SIZE_BITS)
+    }
+}
+
+/// ----------------------
+/// A physical memory frame.
+/// -----------------------
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord,Debug)]
+#[repr(C)]
+pub struct PhysFrame {
+    ppn : PhysPageNum
+}
+
+impl PhysFrame{
+    /// Returns the frame that contains the given physical address.
+    /// Unsafe! This operation obly used for boot or sepical frame which are alloc in advance
+    pub unsafe fn containing_address(address: PhysAddr) -> Self {
+        Self {
+            ppn: PhysPageNum::new(address)
+        }
+    }
+    pub unsafe fn new(_ppn:PhysPageNum)->Self{
+        Self{
+            ppn: _ppn,
+        }
+    }
+    /// Returns the start address of the frame.
+    pub fn ppn(&self) -> PhysPageNum {
+        self.ppn
+    }
+}
+
+impl Drop for PhysFrame {
+    fn drop(&mut self) {
+        // 释放所占有的页帧
+        CurrentFrameAllocator.exclusive_access().deallocate_frame(self);
+    }
+}
+

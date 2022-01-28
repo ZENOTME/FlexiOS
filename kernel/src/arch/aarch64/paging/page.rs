@@ -1,10 +1,8 @@
-
-use crate::mm::address::*;
 use core::{
-    fmt,
     marker::PhantomData,
-    ops::{Add, AddAssign, Sub, SubAssign},
 };
+
+use crate::mm_type::VirtAddr;
 
 pub trait PageSize: Copy + Eq + PartialOrd + Ord {
     /// The page size in bytes.

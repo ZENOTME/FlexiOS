@@ -11,17 +11,15 @@
 //!
 //! crate::cpu::boot::arch_boot
 
-use crate::arch::paging::{
+use crate::{arch::paging::{
     page_table::{PageTable,PageTableFlagsField,PageTableFlags},
     page::*,
-};
-use crate::arch::{phys_to_virt};
+}, mm_type::*};
 use crate::arch::board::*;
-use crate::mm::{address::*,frame::PhysFrame};
 use cortex_a::{registers::*,asm::barrier};
 use tock_registers::interfaces::{Writeable,Readable,ReadWriteable};
 use crate::arch::paging::page_mode::ARM64;
-use crate::mm::page_mode::PhysPageNum;
+
 
 
 // Assembly counterpart to this file.
@@ -41,14 +39,13 @@ extern "C" fn clear_bss() {
 
 #[link_section = ".text.boot"]
 fn map_2mib(p2: &mut PageTable, start: usize, end: usize, flag: PageTableFlagsField) {
-    let aligned_start = PhysAddr::from(floor(start, Size2MiB::SIZE));
-    let aligned_end = PhysAddr::from(ceil(end , Size2MiB::SIZE));
+    let aligned_start = floor(start, Size2MiB::SIZE)>>12;
+    let aligned_end = ceil(end , Size2MiB::SIZE)>>12;
     unsafe{
-        let ranger=PhysFrame::<ARM64>::range_of(aligned_start, aligned_end);
-        for ppn in ranger.range().step_by(512){    
+        for ppn in (aligned_start..aligned_end).step_by(512){    
             let paddr = PhysAddr::from(ppn<<12);
             let page = Page::<Size2MiB>::containing_address(phys_to_virt(paddr));
-            p2[page.p2_index()].set_block(PhysPageNum::new::<ARM64>(paddr), flag);
+            p2[page.p2_index()].set_block(PhysPageNum::new(paddr), flag);
         }
     }
 }
@@ -59,11 +56,11 @@ extern "C" fn create_init_paging() {
     let p0 = unsafe { &mut *(page_table_lvl0 as *mut PageTable) };
     let p1 = unsafe { &mut *(page_table_lvl1 as *mut PageTable) };
     let p2 = unsafe { &mut *(page_table_lvl2 as *mut PageTable) };
-    let frame_lvl1:PhysFrame;
-    let frame_lvl2:PhysFrame;
+    let ppn_lvl1:PhysPageNum;
+    let ppn_lvl2:PhysPageNum;
     unsafe{
-        frame_lvl1 = PhysFrame::<ARM64>::containing_address(PhysAddr::from(page_table_lvl1 as usize));
-        frame_lvl2 = PhysFrame::<ARM64>::containing_address(PhysAddr::from(page_table_lvl2 as usize));
+        ppn_lvl1 = PhysPageNum::new(PhysAddr::from(page_table_lvl1 as usize));
+        ppn_lvl2 = PhysPageNum::new(PhysAddr::from(page_table_lvl2 as usize));
     }
     p0.zero();
     p1.zero();
@@ -72,14 +69,14 @@ extern "C" fn create_init_paging() {
     let block_flags = PageTableFlags::VALID::SET+  PageTableFlags::UXN::SET;
     let table_flags=PageTableFlags::VALID::SET+PageTableFlags::TABLE_OR_BLOCK::SET;
     // 0x0000_0000_0000 ~ 0x0080_0000_0000
-    p0[0].set_frame(frame_lvl1.ppn(), table_flags);
+    p0[0].set_frame(ppn_lvl1, table_flags);
     // 0x8000_0000_0000 ~ 0x8080_0000_0000
-    p0[256].set_frame(frame_lvl1.ppn(), table_flags);
+    p0[256].set_frame(ppn_lvl1, table_flags);
     // 0x0000_0000 ~ 0x4000_0000
-    p1[0].set_frame(frame_lvl2.ppn(), table_flags);
+    p1[0].set_frame(ppn_lvl2, table_flags);
     // 0x4000_0000 ~ 0x8000_0000
     p1[1].set_block(
-        PhysPageNum::new::<ARM64>(PhysAddr::from(PERIPHERALS_END as usize)),
+        PhysPageNum::new(PhysAddr::from(PERIPHERALS_END as usize)),
         block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)
     );
 
