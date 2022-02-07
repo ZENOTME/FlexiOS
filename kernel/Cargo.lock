@@ -22,7 +22,7 @@ source = "git+https://github.com/rcore-os/bcm2837#cd5ac625c11e5f4ad9a5c83bc2cfa8
 dependencies = [
  "aarch64",
  "log",
- "volatile",
+ "volatile 0.2.7",
 ]
 
 [[package]]
@@ -71,6 +71,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "device_tree"
+version = "1.0.3"
+source = "git+https://github.com/rcore-os/device_tree-rs?rev=2fa8411#2fa8411c421c6b4761992fd3d1a9b2427bf0cfc4"
+
+[[package]]
 name = "kernel"
 version = "0.1.0"
 dependencies = [
@@ -78,9 +83,11 @@ dependencies = [
  "bitflags",
  "buddy_system_allocator",
  "cortex-a",
+ "device_tree",
  "lazy_static",
  "log",
  "tock-registers 0.7.0",
+ "virtio-drivers",
 ]
 
 [[package]]
@@ -162,7 +169,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88dfeb711b61ce620c0cb6fd9f8e3e678622f0c971da2a63c4b3e25e88ed012f"
 
 [[package]]
+name = "virtio-drivers"
+version = "0.1.0"
+source = "git+https://github.com/rcore-os/virtio-drivers.git#2aaf7d60c557ffdfaa2403bef420d41e469009ba"
+dependencies = [
+ "bitflags",
+ "log",
+ "volatile 0.3.0",
+]
+
+[[package]]
 name = "volatile"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b06ad3ed06fef1713569d547cdbdb439eafed76341820fb0e0344f29a41945"
+
+[[package]]
+name = "volatile"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8e76fae08f03f96e166d2dfda232190638c10e0383841252416f9cfe2ae60e6"

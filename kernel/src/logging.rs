@@ -1,6 +1,6 @@
 use core::fmt::{self,Write};
 use log::{self,Level,LevelFilter,Log,Metadata,Record};
-
+use super::driver::pl01_send;
 
 pub fn init(){
     static LOGGER: SimpleLogger=SimpleLogger;
@@ -73,7 +73,7 @@ impl fmt::Write for Stdout{
     fn write_str(&mut self,s:&str)->fmt::Result{
         for c in s.chars(){
             unsafe{
-                core::ptr::write_volatile(0x3F20_1000 as *mut u8, c as u8);
+                pl01_send(c);
             }
         }
         Ok(())

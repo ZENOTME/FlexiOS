@@ -25,7 +25,8 @@ extern crate bitflags;
 extern crate tock_registers;
 #[macro_use]
 extern crate cortex_a;
-
+#[macro_use]
+extern crate virtio_drivers;
 
 
 #[path = "arch/aarch64/mod.rs"]
@@ -39,15 +40,16 @@ mod mm_type;
 mod frame_allocator;
 mod heap_allocator;
 mod addr_space;
+mod driver;
 /// Early init code.
 ///
 /// # Safety
 ///
 /// - Only a single core must be active and running this function.
 pub fn kmain() -> ! {
-    println!("[0] Hello My OS!");
-    println!("[1] Initing...");
     heap_allocator::init_heap();
+    driver::driver_init();
+    println!("[0] Finish driver initing!");
     println!("[2] Testing...");
     addr_space::test_solve();
     panic!("Close OS!")

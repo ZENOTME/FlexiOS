@@ -78,7 +78,7 @@ extern "C" fn create_init_paging() {
     // 0x4000_0000 ~ 0x8000_0000
     p1[0].set_block(
         PhysPageNum::new(PhysAddr::from(PERIPHERALS_START as usize)),
-        block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)
+        block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)+PageTableFlags::AF::SET
     );
 
     // normal memory (0x0000_0000 ~ 0x3F00_0000)

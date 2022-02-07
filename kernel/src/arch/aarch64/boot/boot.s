@@ -34,6 +34,8 @@ switch_to_el2:
     # switch to EL2 if we're in EL3. otherwise switch to EL1
     cmp     x0, #2
     beq     switch_to_el1
+    cmp     x0, #1
+    beq     el_setup_end
 
     # at EL3
 	# 0 non-secure state

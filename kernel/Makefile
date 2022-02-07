@@ -15,7 +15,9 @@ ifeq ($(BSP),rpi3)
     QEMU_MACHINE_TYPE = virt
     QEMU_RELEASE_ARGS = -m 1G\
 			-cpu cortex-a53\
-    			-nographic
+    			-nographic \
+			-drive file=fs.img,if=none,format=raw,id=x0\
+			-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
     OBJDUMP_BINARY    = aarch64-none-elf-objdump
     NM_BINARY         = aarch64-none-elf-nm
     READELF_BINARY    = aarch64-none-elf-readelf
@@ -25,7 +27,7 @@ else ifeq ($(BSP),rpi4)
     TARGET            = aarch64-unknown-none-softfloat
     KERNEL_BIN        = kernel8.img
     QEMU_BINARY       = qemu-system-aarch64
-    QEMU_MACHINE_TYPE =
+    QEMU_MACHINE_TYPE = raspi3
     QEMU_RELEASE_ARGS = -serial stdio -display none
     OBJDUMP_BINARY    = aarch64-none-elf-objdump
     NM_BINARY         = aarch64-none-elf-nm
@@ -88,7 +90,7 @@ all: $(KERNEL_BIN)
 ##------------------------------------------------------------------------------
 ## Build the kernel ELF
 ##------------------------------------------------------------------------------
-$(KERNEL_ELF):
+$(KERNEL_ELF):virt.dtb
 	@echo "\nCompiling kernel - $(BSP)"
 	@RUSTFLAGS="$(RUSTFLAGS)" $(RUSTC_CMD)
 
@@ -173,3 +175,6 @@ debug: $(KERNEL_BIN)
 		"$(EXEC_QEMU) $(QEMU_RELEASE_ARGS) -kernel $(KERNEL_BIN) -s -S" && \
 		tmux split-window -h "gdb-multiarch -n -x -ex 'file target/$(TARGET)/release/kernel' -ex 'set arch aarch64' -ex 'target remote localhost:1234'" && \
 		tmux -2 attach-session -d
+dts: 
+	$(EXEC_QEMU) -M dumpdtb=virt.dtb $(QEMU_RELEASE_ARGS)  
+	dtc -I dtb -O dts -o virt.dts virt.dtb

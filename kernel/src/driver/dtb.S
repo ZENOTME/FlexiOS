@@ -1,0 +1,2 @@
+dtb:
+    .incbin "./virt.dtb"
