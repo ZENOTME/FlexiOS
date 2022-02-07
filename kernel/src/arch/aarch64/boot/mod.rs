@@ -73,27 +73,30 @@ extern "C" fn create_init_paging() {
     // 0x8000_0000_0000 ~ 0x8080_0000_0000
     p0[256].set_frame(ppn_lvl1, table_flags);
     // 0x0000_0000 ~ 0x4000_0000
-    p1[0].set_frame(ppn_lvl2, table_flags);
+    p1[1].set_block(PhysPageNum::new(PhysAddr::from(MEMORY_START as usize)), 
+        block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET);
     // 0x4000_0000 ~ 0x8000_0000
-    p1[1].set_block(
-        PhysPageNum::new(PhysAddr::from(PERIPHERALS_END as usize)),
+    p1[0].set_block(
+        PhysPageNum::new(PhysAddr::from(PERIPHERALS_START as usize)),
         block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)
     );
 
     // normal memory (0x0000_0000 ~ 0x3F00_0000)
+    /* 
     map_2mib(
         p2,
         0,
         0x3E00_0000,//PERIPHERALS_START,
         block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET
-    );
+    );*/
     // device memory (0x3F00_0000 ~ 0x4000_0000)
+    /* 
     map_2mib(
         p2,
         PERIPHERALS_START,
         floor(PERIPHERALS_END , Size1GiB::SIZE) ,
         block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)+PageTableFlags::AF::SET
-    );
+    );*/
 }
 
 #[no_mangle]

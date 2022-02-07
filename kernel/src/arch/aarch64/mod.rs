@@ -12,7 +12,7 @@ pub mod cpu;
 pub mod mm_type;
 pub mod paging;
 mod boot;
-mod exception;
+//mod exception;
 
 pub use mm_type::*;
 /// The entry point of kernel
