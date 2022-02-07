@@ -12,10 +12,10 @@ ifeq ($(BSP),rpi3)
     TARGET            = aarch64-unknown-none-softfloat
     KERNEL_BIN        = kernel8.img
     QEMU_BINARY       = qemu-system-aarch64
-    QEMU_MACHINE_TYPE = virt,dumpdtb=virt.dtb
-    QEMU_RELEASE_ARGS = -cpu cortex-a53\
-			            -m 1G \
-			            -nographic
+    QEMU_MACHINE_TYPE = virt
+    QEMU_RELEASE_ARGS = -m 1G\
+			-cpu cortex-a53\
+    			-nographic
     OBJDUMP_BINARY    = aarch64-none-elf-objdump
     NM_BINARY         = aarch64-none-elf-nm
     READELF_BINARY    = aarch64-none-elf-readelf
@@ -171,5 +171,5 @@ qemu: $(KERNEL_BIN)
 debug: $(KERNEL_BIN)
 	tmux new-session -d \
 		"$(EXEC_QEMU) $(QEMU_RELEASE_ARGS) -kernel $(KERNEL_BIN) -s -S" && \
-		tmux split-window -h "gdb-multiarch -n -x -ex 'set arch aarch64' -ex 'target remote localhost:1234'" && \
+		tmux split-window -h "gdb-multiarch -n -x -ex 'file target/$(TARGET)/release/kernel' -ex 'set arch aarch64' -ex 'target remote localhost:1234'" && \
 		tmux -2 attach-session -d
