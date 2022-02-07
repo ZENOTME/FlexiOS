@@ -12,8 +12,10 @@ ifeq ($(BSP),rpi3)
     TARGET            = aarch64-unknown-none-softfloat
     KERNEL_BIN        = kernel8.img
     QEMU_BINARY       = qemu-system-aarch64
-    QEMU_MACHINE_TYPE = raspi3
-    QEMU_RELEASE_ARGS = -serial stdio -display none
+    QEMU_MACHINE_TYPE = virt,dumpdtb=virt.dtb
+    QEMU_RELEASE_ARGS = -cpu cortex-a53\
+			            -m 1G\
+			            -nographic
     OBJDUMP_BINARY    = aarch64-none-elf-objdump
     NM_BINARY         = aarch64-none-elf-nm
     READELF_BINARY    = aarch64-none-elf-readelf
