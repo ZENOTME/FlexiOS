@@ -14,7 +14,7 @@ ifeq ($(BSP),rpi3)
     QEMU_BINARY       = qemu-system-aarch64
     QEMU_MACHINE_TYPE = virt,dumpdtb=virt.dtb
     QEMU_RELEASE_ARGS = -cpu cortex-a53\
-			            -m 1G\
+			            -m 1G \
 			            -nographic
     OBJDUMP_BINARY    = aarch64-none-elf-objdump
     NM_BINARY         = aarch64-none-elf-nm
@@ -39,7 +39,7 @@ QEMU_MISSING_STRING = "This board is not yet supported for QEMU."
 # Export for build.rs.
 export LINKER_FILE
 
-KERNEL_ELF = target/$(TARGET)/release/kernel
+KERNEL_ELF = ./target/$(TARGET)/release/kernel
 
 
 
@@ -171,5 +171,5 @@ qemu: $(KERNEL_BIN)
 debug: $(KERNEL_BIN)
 	tmux new-session -d \
 		"$(EXEC_QEMU) $(QEMU_RELEASE_ARGS) -kernel $(KERNEL_BIN) -s -S" && \
-		tmux split-window -h "gdb-multiarch -n -x -ex 'file $(KERNEL_ELF)' -ex 'set arch aarch64' -ex 'target remote localhost:1234'" && \
+		tmux split-window -h "gdb-multiarch -n -x -ex 'set arch aarch64' -ex 'target remote localhost:1234'" && \
 		tmux -2 attach-session -d
