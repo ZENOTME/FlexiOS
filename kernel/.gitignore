@@ -1,2 +1,3 @@
 /target
-fs.img
+./fs.img
+./kernel8.img

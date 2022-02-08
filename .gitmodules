@@ -1,0 +1,3 @@
+[submodule "virtio-drivers"]
+	path = virtio-drivers
+	url = https://github.com/ZENOTME/virtio-drivers.git
