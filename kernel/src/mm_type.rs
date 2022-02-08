@@ -1,6 +1,6 @@
 use core::fmt::{self, Debug, Formatter};
 use core::ops::{Add,AddAssign,Sub,SubAssign};
-use crate::frame_allocator::CurrentFrameAllocator;
+use crate::frame_allocator::{CurrentFrameAllocator, FrameAllocator};
 /// Re-export the mm_type const
 pub use crate::arch::mm_type::{
     PAGE_SIZE,PAGE_SIZE_BITS,PA_WIDTH,VA_WIDTH,KERNEL_BASE

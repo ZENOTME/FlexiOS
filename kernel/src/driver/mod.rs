@@ -58,7 +58,7 @@ fn virtio_probe(node: &Node) {
     if let Some(reg) = node.prop_raw("reg") {
         let paddr = reg.as_slice().read_be_u64(0).unwrap();
         let size = reg.as_slice().read_be_u64(8).unwrap();
-        let vaddr = paddr;
+        let vaddr = paddr+0xffff_0000_0000_0000;
         info!("walk dt addr={:#x}, size={:#x}", paddr, size);
         let header = unsafe { &mut *(vaddr as *mut VirtIOHeader) };
         info!(

@@ -48,6 +48,11 @@ mod driver;
 /// - Only a single core must be active and running this function.
 pub fn kmain() -> ! {
     heap_allocator::init_heap();
+    logging::init();
+    println!("LOG test..");
+    info!("info");
+    warn!("warn");
+    error!("error");
     driver::driver_init();
     println!("[0] Finish driver initing!");
     println!("[2] Testing...");
