@@ -2,7 +2,7 @@ use core::{
     marker::PhantomData,
 };
 
-use crate::mm_type::VirtAddr;
+use crate::addr_type::*;
 
 pub trait PageSize: Copy + Eq + PartialOrd + Ord {
     /// The page size in bytes.
@@ -57,12 +57,13 @@ impl<S: PageSize> Page<S> {
             start_address: address.floor(S::SIZE),
             size: PhantomData,
         }
+        
     }
     /// Returns the page that starts at the given virtual address.
     ///
     /// Returns an error if the address is not correctly aligned (i.e. is not a valid page start).
     pub fn from_start_address(address: VirtAddr) -> Result<Self, ()> {
-        if !address.aligned(S::SIZE) {
+        if !address.is_aligned(S::SIZE) {
             return Err(());
         }
         Ok(Page::containing_address(address))

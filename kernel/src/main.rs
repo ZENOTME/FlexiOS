@@ -36,16 +36,19 @@ pub mod logging;
 mod panic_wait;
 mod consts;
 mod up;
-mod mm_type;
+mod addr_type;
 mod frame_allocator;
 mod heap_allocator;
 mod addr_space;
 mod driver;
-/// Early init code.
-///
-/// # Safety
-///
-/// - Only a single core must be active and running this function.
+mod frame;
+// Contemporary Loader
+
+mod loader;
+
+use core::arch::global_asm;
+global_asm!(include_str!("link_app.S"));
+
 pub fn kmain() -> ! {
     heap_allocator::init_heap();
     logging::init();
@@ -56,6 +59,7 @@ pub fn kmain() -> ! {
     driver::driver_init();
     println!("[0] Finish driver initing!");
     println!("[2] Testing...");
-    addr_space::test_solve();
+    //addr_space::test_solve();
+    loader::list_apps();
     panic!("Close OS!")
 }
