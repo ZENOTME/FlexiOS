@@ -32,3 +32,4 @@ bcm2837 = { git = "https://github.com/rcore-os/bcm2837", version = "2.5.1", opti
 device_tree = { git = "https://github.com/rcore-os/device_tree-rs", rev = "2fa8411" }
 virtio-drivers = { path="../virtio-drivers" }
 zerocopy = "0.6.1"
+xmas-elf = "0.7.0"

@@ -12,13 +12,11 @@
 //! crate::cpu::boot::arch_boot
 
 use crate::{arch::paging::{
-    page_table::{PageTable,PageTableFlagsField,PageTableFlags},
-    page::*,
-}, mm_type::*};
+    page_table::{PageTable,PageTableFlags},
+}, addr_type::*};
 use crate::arch::board::*;
 use cortex_a::{registers::*,asm::barrier};
 use tock_registers::interfaces::{Writeable,Readable,ReadWriteable};
-use crate::arch::paging::page_mode::ARM64;
 
 
 
@@ -37,66 +35,34 @@ extern "C" fn clear_bss() {
     }
 }
 
-#[link_section = ".text.boot"]
-fn map_2mib(p2: &mut PageTable, start: usize, end: usize, flag: PageTableFlagsField) {
-    let aligned_start = floor(start, Size2MiB::SIZE)>>12;
-    let aligned_end = ceil(end , Size2MiB::SIZE)>>12;
-    unsafe{
-        for ppn in (aligned_start..aligned_end).step_by(512){    
-            let paddr = PhysAddr::from(ppn<<12);
-            let page = Page::<Size2MiB>::containing_address(phys_to_virt(paddr));
-            p2[page.p2_index()].set_block(PhysPageNum::new(paddr), flag);
-        }
-    }
-}
+
 
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn create_init_paging() {
     let p0 = unsafe { &mut *(page_table_lvl0 as *mut PageTable) };
     let p1 = unsafe { &mut *(page_table_lvl1 as *mut PageTable) };
-    let p2 = unsafe { &mut *(page_table_lvl2 as *mut PageTable) };
-    let ppn_lvl1:PhysPageNum;
-    let ppn_lvl2:PhysPageNum;
+    let ppn_lvl1:PhysAddr;
     unsafe{
-        ppn_lvl1 = PhysPageNum::new(PhysAddr::from(page_table_lvl1 as usize));
-        ppn_lvl2 = PhysPageNum::new(PhysAddr::from(page_table_lvl2 as usize));
+        ppn_lvl1 = PhysAddr::from(page_table_lvl1 as usize);
     }
     p0.zero();
     p1.zero();
-    p2.zero();
 
-    let block_flags = PageTableFlags::VALID::SET+  PageTableFlags::UXN::SET;
-    let table_flags=PageTableFlags::VALID::SET+PageTableFlags::TABLE_OR_BLOCK::SET;
+    let block_flags =  PageTableFlags::UXN::SET;
     // 0x0000_0000_0000 ~ 0x0080_0000_0000
-    p0[0].set_frame(ppn_lvl1, table_flags);
+    p0[0].set_table_page(ppn_lvl1, None);
     // 0x8000_0000_0000 ~ 0x8080_0000_0000
-    p0[256].set_frame(ppn_lvl1, table_flags);
+    p0[256].set_table_page(ppn_lvl1, None);
     // 0x0000_0000 ~ 0x4000_0000
-    p1[1].set_block(PhysPageNum::new(PhysAddr::from(MEMORY_START as usize)), 
-        block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET);
-    // 0x4000_0000 ~ 0x8000_0000
-    p1[0].set_block(
-        PhysPageNum::new(PhysAddr::from(PERIPHERALS_START as usize)),
-        block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)+PageTableFlags::AF::SET
+    p1[1].set_huge_page(PhysAddr::from(MEMORY_START as usize), 
+        Some(block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET)
     );
-
-    // normal memory (0x0000_0000 ~ 0x3F00_0000)
-    /* 
-    map_2mib(
-        p2,
-        0,
-        0x3E00_0000,//PERIPHERALS_START,
-        block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET
-    );*/
-    // device memory (0x3F00_0000 ~ 0x4000_0000)
-    /* 
-    map_2mib(
-        p2,
-        PERIPHERALS_START,
-        floor(PERIPHERALS_END , Size1GiB::SIZE) ,
-        block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)+PageTableFlags::AF::SET
-    );*/
+    // 0x4000_0000 ~ 0x8000_0000
+    p1[0].set_huge_page(
+        PhysAddr::from(PERIPHERALS_START as usize),
+        Some(block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)+PageTableFlags::AF::SET)
+    );
 }
 
 #[no_mangle]
@@ -163,7 +129,6 @@ extern "C" {
     fn ebss();
     fn page_table_lvl0();
     fn page_table_lvl1();
-    fn page_table_lvl2();
     fn _start();
     fn _end();
 }

@@ -12,11 +12,15 @@ pub mod cpu;
 pub mod mm_type;
 pub mod paging;
 mod boot;
-//mod exception;
+mod sched;
+mod exception;
 
+pub use sched::*;
 pub use mm_type::*;
+pub use exception::eret_to_thread;
 /// The entry point of kernel
 #[no_mangle] // don't mangle the name of this function
 pub extern "C" fn master_main() -> ! {
+    exception::exception_init();
     crate::kmain();
 }

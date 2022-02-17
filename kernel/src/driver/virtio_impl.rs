@@ -1,38 +1,37 @@
 // memory allocate interface
-use core::{sync::atomic::*, cell::{Ref, RefMut}};
+
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use crate::{frame_allocator::{CurrentFrameAllocator, FrameAllocator}, addr_type::*, arch::KERNEL_BASE, up::UPSafeCell, frame::Frame};
+use crate::{frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator, UnsafePageAlloctor}, arch::KERNEL_BASE, up::UPSafeCell, frame::{DataFrame, FrameSize}, addr_type::PhysAddr};
 
-
-//Store allocator frame
-lazy_static!{
-    pub static ref VirtioFrameCollector : UPSafeCell<Vec<Frame>> =unsafe {
-        UPSafeCell::new(Vec::new())
-    };
-}
 
 
 
 #[no_mangle]
 extern "C" fn virtio_dma_alloc(pages: usize) -> usize {
-    let phy_frame=CurrentFrameAllocator.exclusive_access().allocate_frames(4096).unwrap()[0];
-    VirtioFrameCollector.exclusive_access().push(phy_frame);
-    for i in (0..pages-1){
-        VirtioFrameCollector.exclusive_access().push(CurrentFrameAllocator.exclusive_access().allocate_frames(4096).unwrap()[0]);
+    let mut paddr=None;
+    for _i in 0..pages {
+        match paddr{
+            Some(_)=>{CURRENT_FRAME_ALLOCATOR.exclusive_access().unsafe_alloc_page().unwrap();},
+            None=>{
+                let t=CURRENT_FRAME_ALLOCATOR.exclusive_access().unsafe_alloc_page().unwrap();
+                paddr=Some(t);
+            }
+        }
     }
-    let paddr;
-    if let Frame::Data(data)= phy_frame{
-        paddr=data.frame_addr().0
-    }
-    trace!("alloc DMA: paddr={:#x}, pages={}", paddr, pages);
-    paddr
+    let paddr=paddr.unwrap();
+    trace!("alloc DMA: paddr={:#x}, pages={}", paddr.0, pages);
+    paddr.0
 }
 
 #[no_mangle]
 extern "C" fn virtio_dma_dealloc(paddr: usize, pages: usize) -> i32 {
-    info!("Can't dealloc,may cause memory leakage!");
-    0
+    let mut t=paddr;
+    for _i in 0..pages{
+        CURRENT_FRAME_ALLOCATOR.exclusive_access().unsafe_deallo(PhysAddr::from(t));
+        t+=FrameSize::Size4Kb as usize;
+   }
+   0
 }
 
 #[no_mangle]

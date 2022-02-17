@@ -11,10 +11,9 @@
 #![feature(alloc_error_handler)]
 #![feature(const_fn_trait_bound)]
 #![feature(llvm_asm)]
-#![feature(asm)]
 #![feature(step_trait)]
 
-use crate::heap_allocator::init_heap;
+use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR};
 
 extern crate alloc;
 #[macro_use]
@@ -42,6 +41,7 @@ mod heap_allocator;
 mod addr_space;
 mod driver;
 mod frame;
+mod thread;
 // Contemporary Loader
 
 mod loader;
@@ -52,14 +52,17 @@ global_asm!(include_str!("link_app.S"));
 pub fn kmain() -> ! {
     heap_allocator::init_heap();
     logging::init();
-    println!("LOG test..");
+    println!(">>LOG test..");
     info!("info");
     warn!("warn");
     error!("error");
+    println!(">>Information of Frame allocator");
+    CURRENT_FRAME_ALLOCATOR.exclusive_access().print_state();
+    println!(">>driver test");
     driver::driver_init();
-    println!("[0] Finish driver initing!");
-    println!("[2] Testing...");
-    //addr_space::test_solve();
+    println!(">> List all app");
     loader::list_apps();
+    
+    
     panic!("Close OS!")
 }

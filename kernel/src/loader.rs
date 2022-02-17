@@ -1,6 +1,8 @@
 use alloc::vec::Vec;
 use lazy_static::*;
 
+use crate::{addr_space::{VmSpace, PageTableInterface}, addr_type::VirtAddr, arch::paging::{PageTable, PageTableFlags}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator}, frame::Frame};
+
 pub fn get_num_app() -> usize {
     extern "C" { fn _num_app(); }
     unsafe { (_num_app as usize as *const usize).read_volatile() }
@@ -59,4 +61,35 @@ pub fn list_apps() {
         println!("{}", app);
     }
     println!("**************/");
+}
+
+pub fn elf_mapper<P:PageTableInterface>(elf_data: &[u8],space:&mut VmSpace<P>)->VirtAddr{
+    let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
+    let elf_header = elf.header;
+    let magic = elf_header.pt1.magic;
+    assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
+    let ph_count = elf_header.pt2.ph_count();
+    for i in 0..ph_count {
+        let ph = elf.program_header(i).unwrap();
+        if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
+            let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
+            let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+            let mut flag = PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::SH::INNERSHARE;
+            let ph_flags = ph.flags();
+            if ph_flags.is_read() && ph_flags.is_write() { 
+                flag=flag+PageTableFlags::AP::EL0_RW_ELX_RW; 
+            }else if ph_flags.is_read() { 
+                flag=flag+PageTableFlags::AP::EL0_OR_ELX_OR; 
+            }
+            if !ph_flags.is_execute() { flag=flag+PageTableFlags::UXN::SET+PageTableFlags::PXN::SET; }
+            let len=end_va.0-start_va.0;
+            let t=CURRENT_FRAME_ALLOCATOR.exclusive_access().allocate_frames(start_va, len).unwrap();
+            let  mut frames=Vec::new();
+            for _frame in t.into_iter(){
+                frames.push(Frame::Data(_frame));
+            }
+            space.map_range(start_va, len, frames, Some(flag));
+        }
+    }
+    (elf.header.pt2.entry_point() as usize) .into()
 }

@@ -201,5 +201,3 @@ page_table_lvl0:
     .space 0x1000 // 4K
 page_table_lvl1:
     .space 0x1000 // 4K
-page_table_lvl2:
-    .space 0x1000 // 4K

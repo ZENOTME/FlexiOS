@@ -2,7 +2,7 @@ use core::{cell::{RefCell, Cell}, cmp};
 
 
 use crate::{addr_type::*, frame::*};
-use alloc::vec::Vec;
+use alloc::{vec::Vec, collections::VecDeque};
 use crate::up::UPSafeCell;
 use lazy_static::*;
 
@@ -11,27 +11,41 @@ use lazy_static::*;
 /// -------------------------
 pub trait FrameAllocator {
     fn create_allocator(baddr:PhysAddr,eaddr:PhysAddr)->Self;
-    fn allocate_frames(& self,size:usize) -> Result<Vec<Frame>, FrameAllocError>;
+    fn allocate_single_frame(& self, size:FrameSize) -> Result<DataFrame,FrameAllocError>;
+    fn allocate_frames(& self,va:VirtAddr,size:usize) -> Result<Vec<DataFrame>, FrameAllocError>;
     fn deallocate_frame(& self, pf: &DataFrame);
 }
 
+pub trait UnsafePageAlloctor{
+    fn unsafe_alloc_page(&self)->Result<PhysAddr,FrameAllocError>;
+    fn unsafe_deallo(&self,pa: PhysAddr);
+}
+
 #[derive(core::fmt::Debug)]
-pub struct FrameAllocError;
+pub enum FrameAllocError{
+    AlignedError,
+    CapNotEnoughError,
+    UnsupportError,
+}
+
 
 type CurrentFrameAllocatorType=StackFrameAllocator;
 
 lazy_static!{
-    pub static ref CurrentFrameAllocator : UPSafeCell<CurrentFrameAllocatorType> =unsafe {
+    pub static ref CURRENT_FRAME_ALLOCATOR : UPSafeCell<CurrentFrameAllocatorType> =unsafe {
         extern "C"{
             fn end();
         }
-        let baddr=PhysAddr::from(end as usize-KERNEL_BASE as usize);
+        // Aligned
+        let mut baddr=end as usize-KERNEL_BASE;
+        baddr=(baddr+4096*512-1)/(4096*512)*(4096*512); 
+        let baddr=PhysAddr::from(baddr);
         let eaddr=PhysAddr::from(MEMORY_END);
         UPSafeCell::new(StackFrameAllocator::create_allocator(baddr,eaddr))
     };
 }
 
-/// -----------------------
+/// ------------------------
 /// A simple stack allocator
 /// recycled
 /// 0 4Mb
@@ -45,81 +59,79 @@ pub struct StackFrameAllocator {
     recycled: [RefCell<Vec<PhysAddr>>;3],
 }
 
+impl StackFrameAllocator{
+    // FOR DEBUG
+    pub fn print_state(&self){
+        println!("curretn:{:x} end:{:x}",self.current.get().0,self.end.0);
+    }
+    //Not recycled!
+    fn new_single_frame(&self,size:FrameSize)->Result<DataFrame,FrameAllocError>{
+        if (self.current.get().0 & (size as usize -1)) !=0 {return Err(FrameAllocError::AlignedError);}
+        if self.current.get()+size as usize > self.end {return Err(FrameAllocError::CapNotEnoughError);}
+        let pa=self.current.replace(self.current.get()+size as usize);
+        return Ok(DataFrame::new(pa,size));
+    }
+}
 
 impl FrameAllocator for StackFrameAllocator{
     fn create_allocator(baddr:PhysAddr,eaddr:PhysAddr)->Self {
        Self{ 
-           current: Cell::new(baddr),
-           end: eaddr,
-           recycled:[RefCell::new(Vec::new());3]
+            current: Cell::new(baddr),
+            end: eaddr,
+            recycled: Default::default(),
         }
     }
-    
-    fn allocate_frames(& self,size:usize) -> Result<Vec<Frame>, FrameAllocError> {
-        let unalloc_size=size;
-        let frames:Vec<Frame>=Vec::new();
-        // HardCode
-        // 0-4096*256
-        // 4096*256-4096*512*256
-        // 4096*512*256-other
-        let _1_level:usize=4096*256;
-        let _2_level:usize=4096*512*256;
-    
-        while unalloc_size!=0 {
-            let index:i32;
-            let sz;
-            match unalloc_size{
-                0..=_1_level=>{
-                    index=0;
-                    sz=FrameSize::Size4Kb;
-                }
-                _1_level..=_2_level=>{
-                    index=1;
-                    sz=FrameSize::Size2Mb;
-                }
-                other=>{
-                    index=2;
-                    sz=FrameSize::Size1Gb;
+    fn allocate_single_frame(& self, size:FrameSize) -> Result<DataFrame,FrameAllocError>{
+        match size{
+            FrameSize::Size4Kb=>{
+                if let Some(pa) = self.recycled[0].borrow_mut().pop(){
+                    return Ok(DataFrame::new(pa,FrameSize::Size4Kb));
+                }else{
+                    return self.new_single_frame(size);
                 }
             }
-            if let Some(pa) = self.recycled[index as usize].borrow_mut().pop(){
-                frames.push(Frame::Data(DataFrame{
-                    start:pa,
-                    size:sz
-                }));
+            FrameSize::Size2Mb|FrameSize::Size1Gb=>{
+                return Err(FrameAllocError::UnsupportError);
+            }
+        }
+    }
+    fn allocate_frames(& self,va:VirtAddr,size:usize) -> Result<Vec<DataFrame>, FrameAllocError> {
+        //round up to 4Kb
+        let size=((size+4095)/4096)*4096;
+        
+        let mut frames=Vec::new();
+        let ans=huge_page_alloc_algroithm(va.num(),self.current.get().num(),size);
+        let mut pos=ans.len();
+        let mut tmp=Vec::new();
+        for _i in (0..ans.len()).rev(){
+            let _idx:usize=match ans[_i]{
+                FrameSize::Size4Kb => 0,
+                FrameSize::Size2Mb => 1,
+                FrameSize::Size1Gb => 2,
+            };
+            if let Some(pa)=self.recycled[_idx].borrow_mut().pop(){
+                tmp.push(DataFrame::new(pa,ans[_i]));
+                pos=_i;
             }else{
-                if self.current.get()+sz as usize > self.end {
-                    loop{
-                        index-=1;
-                        if index<0 { break };
-                        match index {
-                            0=>{
-                                if self.current.get()+FrameSize::Size4Kb as usize <= self.end {
-                                    sz=FrameSize::Size4Kb;
-                                    break;
-                                }
-                            }
-                            1=>{
-                                if self.current.get()+FrameSize::Size2Mb as usize <= self.end {
-                                    sz=FrameSize::Size2Mb;
-                                    break;
-                                }
-                            }
-                            _=>{
-                                return Err(FrameAllocError);
-                            }
-                        }
-                    }
-                    if index<0 {return Err(FrameAllocError)};
-                } 
-                
-                let pa = self.current.replace(self.current.get()+sz as usize);
-                frames.push(Frame::Data(DataFrame{
-                    start:pa,
-                    size:sz
-                }));
+                break;
             }
-            unalloc_size -= cmp::min(unalloc_size,sz as usize)
+        }
+        for _i in 0..pos {
+            let sz=ans[_i];
+            match self.new_single_frame(sz){
+                Ok(frame)=> {frames.push(frame)},
+                Err(error)=>{
+                    return Err(error); 
+                }
+            }
+        }
+        loop{
+            if let Some(frame)=tmp.pop(){
+                frames.push(frame);
+            }
+            else{
+                break;
+            }
         }
         Ok(frames)
     }
@@ -139,3 +151,70 @@ impl FrameAllocator for StackFrameAllocator{
     }
 }
 
+// -----------------
+// Huge page alloc algorithm 
+//
+// vn VirAddr.num()
+// pn PhyAddr.num()
+// n PageSize
+// return Vec<FrameSize> Ex:
+// |4Kb|2Mb|1Gb|2Mb|4Kb|
+//-------------------
+fn huge_page_alloc_algroithm(vn:usize,pn:usize,n:usize)->VecDeque<FrameSize>{
+    //Hard Code
+    let aligns:[usize;3]=[512*512,512,1];
+    let mut ans:VecDeque<FrameSize>=VecDeque::new();
+    for (pos,align) in aligns.iter().enumerate(){
+        if (vn % align) != (pn % align) || n<*align {
+            continue;
+        }
+        let (mut ve_prev,mut vs_prev):(Option<usize>,Option<usize>) = (None,None);
+        for j in pos..aligns.len(){
+            let align=aligns[j];
+            let ve_cur = ((vn+align-1)/align)*align;
+            let vs_cur=align*((vn+n)/align);
+            let frame=match align{
+                1=>{FrameSize::Size4Kb}
+                512=>{FrameSize::Size2Mb}
+                0x40000=>{FrameSize::Size1Gb}
+                _=>{FrameSize::Size4Kb}
+            };
+            if let (Some(ve_prev),Some(vs_prev)) = (ve_prev,vs_prev){
+                let l_nframe=(ve_prev-ve_cur)/align;
+                let r_nframe=(vs_cur-vs_prev)/align;
+                for _i in 0..l_nframe{
+                    ans.push_front(frame);
+                }
+                for _i in 0..r_nframe{
+                    ans.push_back(frame);
+                }
+            }else{
+                let nframe=(vs_cur-ve_cur)/align;
+                for _i in 0..nframe{
+                    ans.push_back(frame);
+                }
+            }
+            (ve_prev,vs_prev) = (Some(ve_cur),Some(vs_cur));
+        }   
+        break;
+    }   
+    ans
+}
+
+// Unsafe Operate
+impl UnsafePageAlloctor for StackFrameAllocator{
+    fn unsafe_alloc_page(&self)->Result<PhysAddr,FrameAllocError> {
+        if let Some(pa) = self.recycled[0].borrow_mut().pop(){
+            return Ok(pa);
+        }else{
+            if (self.current.get().0 & (FrameSize::Size4Kb as usize-1)) !=0 {println!("0x{:x}",self.current.get().0);return Err(FrameAllocError::AlignedError);}
+            if (self.current.get()+FrameSize::Size4Kb as usize) > self.end {return Err(FrameAllocError::CapNotEnoughError);}
+            let pa=self.current.replace(self.current.get()+FrameSize::Size4Kb as usize);
+            return Ok(pa);
+        }
+    }
+
+    fn unsafe_deallo(&self,pa: PhysAddr) {
+        self.recycled[0].borrow_mut().push(pa);
+    }
+}

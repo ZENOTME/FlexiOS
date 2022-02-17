@@ -130,3 +130,7 @@ set_exception_vector:
     adr	x0, el1_vector
 	msr	vbar_el1, x0
 	ret
+
+eret_to_thread:
+	mov sp,X0
+	exception_exit
