@@ -1,6 +1,6 @@
 use core::ops::{Index, IndexMut};
 
-use cortex_a::registers::TTBR0_EL1;
+use cortex_a::registers::{TTBR0_EL1, TTBR1_EL1};
 use zerocopy::FromBytes;
 
 use crate::{addr_type::{VirtAddr, PhysAddr}, println};
@@ -90,6 +90,7 @@ impl ThreadCtx{
 
 pub fn switch_to_vmspace(addr:PhysAddr){
     TTBR0_EL1.set_baddr(addr.0 as u64);
+	//TTBR1_EL1.set_baddr(addr.0 as u64);
 }
 pub fn switch_to_context(addr:VirtAddr){
     unsafe{eret_to_thread(addr.0);}

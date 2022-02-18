@@ -32,13 +32,7 @@ impl KernelStack{
     pub fn push_on<T>(&mut self,value:T) where T:Sized+FromBytes{
         let ptr=self.data.as_type_mut::<T>(self.pos-core::mem::size_of::<T>() ).unwrap(); 
         *ptr=value;
-        unsafe{
-            println!("StackContext");
-            let ptr=self.data.as_type_mut::<[u64;35]>(self.pos-core::mem::size_of::<T>() ).unwrap(); 
-            for _e in ptr.iter(){
-                println!("{:#x}",_e);
-            }
-        }
+        self.pos=self.pos-core::mem::size_of::<T>();
     }
 }
 
