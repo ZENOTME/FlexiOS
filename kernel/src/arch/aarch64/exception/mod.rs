@@ -26,7 +26,8 @@ extern "C" fn syn_exception_handler(){
    match esr_ec {
         Some(ESR_EL1::EC::Value::SVC64) => panic!("Unsupported syscall"),
         Some(ESR_EL1::EC::Value::DataAbortLowerEL) => panic!("Unsupported DataAbortLowerEL"),
-        _ => panic!("Other exception"),
+        Some(other)=> panic!("Other exception:{:#b} FaultAddr: {:#x} ExceptionLinkAddr: {:#x}",other as usize,FAR_EL1.get(),ELR_EL1.get()),
+        None=>panic!("None")
    }
 }
 

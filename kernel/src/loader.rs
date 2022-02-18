@@ -70,19 +70,26 @@ pub fn elf_mapper(elf_data: &[u8],space:&mut VmSpace)->VirtAddr{
     assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
     let ph_count = elf_header.pt2.ph_count();
     for i in 0..ph_count {
-        info!("Loader Hello Elf Segement :{}",i);
+info!("Loader Hello Elf Segement :{}",i);
         let ph = elf.program_header(i).unwrap();
+info!("===========");
+info!("{:?}",ph);
         if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
             let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
             let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-            let mut flag = PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::SH::INNERSHARE;
+            let mut flag = PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::SH::INNERSHARE+PageTableFlags::AF::SET;
             let ph_flags = ph.flags();
-            if ph_flags.is_read() && ph_flags.is_write() { 
+info!("{}",ph_flags);
+            if ph_flags.is_read() && ph_flags.is_write() {
+info!("RW!!!");
                 flag=flag+PageTableFlags::AP::EL0_RW_ELX_RW; 
-            }else if ph_flags.is_read() { 
+            }else if ph_flags.is_read() {
+info!("OR!!!"); 
                 flag=flag+PageTableFlags::AP::EL0_OR_ELX_OR; 
             }
             if !ph_flags.is_execute() { flag=flag+PageTableFlags::UXN::SET+PageTableFlags::PXN::SET; }
+            else {flag=flag+PageTableFlags::UXN::CLEAR+PageTableFlags::PXN::SET;}
+
             let len=end_va.0-start_va.0;
             let t=CURRENT_FRAME_ALLOCATOR.exclusive_access().allocate_frames(start_va, len).unwrap();
             let  mut frames=Vec::new();

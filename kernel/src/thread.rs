@@ -32,6 +32,13 @@ impl KernelStack{
     pub fn push_on<T>(&mut self,value:T) where T:Sized+FromBytes{
         let ptr=self.data.as_type_mut::<T>(self.pos-core::mem::size_of::<T>() ).unwrap(); 
         *ptr=value;
+        unsafe{
+            println!("StackContext");
+            let ptr=self.data.as_type_mut::<[u64;35]>(self.pos-core::mem::size_of::<T>() ).unwrap(); 
+            for _e in ptr.iter(){
+                println!("{:#x}",_e);
+            }
+        }
     }
 }
 
@@ -51,8 +58,7 @@ impl Thread{
             stack_frames.push(Frame::Data(_frame));
         }
         stack_frames.push(Frame::Guard(GuardFrame::new(FrameSize::Size4Kb)));
-        println!("stack page num {}",stack_frames.len());
-        let stack_flag=PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::SH::INNERSHARE+PageTableFlags::AP::EL0_RW_ELX_RW+PageTableFlags::UXN::SET+PageTableFlags::PXN::SET;
+        let stack_flag=PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::SH::INNERSHARE+PageTableFlags::AP::EL0_RW_ELX_RW+PageTableFlags::UXN::SET+PageTableFlags::PXN::SET+PageTableFlags::AF::SET;
         space.map_range(stack_base, stack_size, stack_frames, Some(stack_flag));
         //Load Binary
         let pc=loader::elf_mapper(elf_data,&mut space);
@@ -62,6 +68,7 @@ impl Thread{
         let mut thread_ctx=ThreadCtx::new();
         thread_ctx.user_init(stack_base+stack_size, pc);
         kernel_stack.push_on(thread_ctx);
+println!("{:?}\n",&space);
         Self{
             state:ThreadState::TS_READY,
             space:Arc::new(unsafe{UPSafeCell::new(space)}),

@@ -21,6 +21,7 @@ pub struct ThreadCtx{
     reg:[u64;REG_NUM]
 }
 
+#[repr(C)]
 pub enum RegType{
     X0 = 0,			/* 0x00 */
 	X1 = 1,			/* 0x08 */
