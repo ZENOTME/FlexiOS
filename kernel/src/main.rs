@@ -13,7 +13,7 @@
 #![feature(llvm_asm)]
 #![feature(step_trait)]
 
-use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR};
+use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR, scheduler::{CURRENT_SCHEDULER, Scheduler}, consts::{ROOT_THREAD_STACK_BASE, ROOT_THREAD_STACK_SIZE}};
 
 extern crate alloc;
 #[macro_use]
@@ -42,6 +42,7 @@ mod addr_space;
 mod driver;
 mod frame;
 mod thread;
+mod scheduler;
 // Contemporary Loader
 
 mod loader;
@@ -62,7 +63,14 @@ pub fn kmain() -> ! {
     driver::driver_init();
     println!(">> List all app");
     loader::list_apps();
-    
+    println!(">> Test user mode!");
+    {
+        let user_data=loader::get_app_data_by_name("hello_world").unwrap();
+        let user_thread=thread::Thread::create_root_thread(user_data,"hello_world",ROOT_THREAD_STACK_BASE.into(),ROOT_THREAD_STACK_SIZE);
+        CURRENT_SCHEDULER.exclusive_access().push_thread(user_thread);
+        CURRENT_SCHEDULER.exclusive_access().sched();
+        panic!("TEST USER MODE NEVER GET TO HERE!!");
+    }
     
     panic!("Close OS!")
 }

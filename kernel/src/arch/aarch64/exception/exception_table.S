@@ -28,7 +28,7 @@
     .align 7
 	exception_enter
 	bl	\label
-	exception_return
+	exception_exit
 .endm
 
 .macro	exception_enter
@@ -105,26 +105,26 @@
  * ============================================================================
  */
 .align	11
-	EXPORT(el1_vector)
-exception_entry handle_entry syn_exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
+el1_vector:
+ handle_entry syn_exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
 
-exception_entry handle_entry syn_exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
+ handle_entry syn_exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
 
-exception_entry handle_entry syn_exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
+ handle_entry syn_exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
 
-exception_entry handle_entry syn_exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
-exception_entry handle_entry exception_handler
+ handle_entry syn_exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
+ handle_entry exception_handler
 
 set_exception_vector:
     adr	x0, el1_vector

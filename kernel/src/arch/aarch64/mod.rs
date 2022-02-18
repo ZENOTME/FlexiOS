@@ -18,6 +18,7 @@ mod exception;
 pub use sched::*;
 pub use mm_type::*;
 pub use exception::eret_to_thread;
+
 /// The entry point of kernel
 #[no_mangle] // don't mangle the name of this function
 pub extern "C" fn master_main() -> ! {

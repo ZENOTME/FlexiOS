@@ -1,11 +1,12 @@
 use core::{
     fmt,
-    ops::{Index,IndexMut}
+    ops::{Index,IndexMut}, panic
 };
-use alloc::string::String;
-use tock_registers::{register_bitfields,fields::FieldValue};
 
-use crate::{addr_type::{PhysAddr, VirtAddr, Addr}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, UnsafePageAlloctor}, addr_space::{PageTableInterface, VmRegion}, frame::{DataFrame, Frame, FrameSize}};
+use tock_registers::{register_bitfields,fields::FieldValue};
+use zerocopy::FromBytes;
+
+use crate::{addr_type::{PhysAddr, VirtAddr, Addr}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, UnsafePageAlloctor}, addr_space::{VmRegion}, frame::{Frame, FrameSize}, logging::print, println};
 
 // -----------------------
 // Page Entry Flags 
@@ -82,7 +83,7 @@ pub const ADDR_MASK: u64 = 0x0000_ffff_ffff_f000;
 pub const PGFLAG_MASK: u64 = 0xffff_0000_0000_0fff;
 
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,FromBytes)]
 #[repr(transparent)]
 pub struct PageTableEntry {
     entry: u64,
@@ -120,10 +121,10 @@ impl PageTableEntry {
     }
 
     /// Get the page_table
-    pub fn get_table(&self) -> Option<&mut PageTable> {
+    pub fn get_table(&self) -> Option<PhysAddr> {
         if self.is_table_page() {
             let pa=self.addr();
-            unsafe { Some(&mut *(pa.0 as *mut PageTable)) }
+            Some(pa)
         }else{
             None
         }
@@ -204,6 +205,7 @@ const ENTRY_COUNT: usize = 512;
 
 #[repr(align(4096))]
 #[repr(C)]
+#[derive(FromBytes)]
 pub struct PageTable {
     entries: [PageTableEntry; ENTRY_COUNT],
 }
@@ -232,14 +234,15 @@ impl PageTable {
         self.entries.iter_mut()
     }
 
+
     // Only the root_pagetable can use 
     // Find the entry of va at layer and crate it if doesn't exist
     // 0 (root) | 1 (1G) | 2 (2M) | 3(4KB) 
     fn find_entry<'a>(&'a mut self,va:VirtAddr,layer:usize)->Result<&'a mut PageTableEntry,&str> {
         let mut current_table:&mut Self=self;
         for _i in 0..layer {
-            if current_table[pg_index(va, _i)].is_table_page() {
-                current_table=current_table[pg_index(va, _i)].get_table().unwrap();
+            if let Some(table) = current_table[pg_index(va, _i)].get_table(){
+                current_table=unsafe { &mut *(table.0 as *mut PageTable) };
             }else{
                 let new_page;
                 if let Ok(pa)=CURRENT_FRAME_ALLOCATOR.exclusive_access().unsafe_alloc_page(){
@@ -248,17 +251,17 @@ impl PageTable {
                     return Err("PageTable:find_entry:Can't not allocate new page");
                 }
                 current_table[pg_index(va, _i)].set_table_page(new_page, None);
-                current_table=current_table[pg_index(va, _i)].get_table().unwrap();
+                let table=current_table[pg_index(va, _i)].get_table().unwrap();
+                current_table=unsafe { &mut *(table.0 as *mut PageTable) };
                 current_table.zero();
             }
 
         }
         Ok(&mut current_table[pg_index(va, layer)])
     }
-}
 
-impl PageTableInterface for PageTable{
-    fn map(&mut self,region:&VmRegion) {
+    //PageTableInterface
+    pub fn map(&mut self,region:&VmRegion) {
         let mut va=region.start();
         let flag=region.flag();
         for _e in region.get_frames(){
@@ -291,11 +294,10 @@ impl PageTableInterface for PageTable{
         }
     }
 
-    fn unmap(&mut self,region:&VmRegion) {
+    pub fn unmap(&mut self,region:&VmRegion) {
         todo!()
     }
 }
-
 
 
 impl Index<usize> for PageTable {

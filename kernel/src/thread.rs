@@ -1,9 +1,9 @@
-use core::cell::RefCell;
+use core::{cell::RefCell};
 
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{ vec::Vec, sync::Arc};
 use zerocopy::FromBytes;
 
-use crate::{addr_space::{VmSpace, PageTableInterface}, frame::{DataFrame, FRAME, Frame, GuardFrame, FrameSize}, addr_type::{phys_to_virt, VirtAddr}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator}, arch::{paging::PageTableFlags, ThreadCtx}, loader};
+use crate::{addr_space::{VmSpace}, frame::{DataFrame, FRAME, Frame, GuardFrame, FrameSize}, addr_type::{phys_to_virt, VirtAddr, PhysAddr}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator}, arch::{paging::PageTableFlags, ThreadCtx}, loader, scheduler::ThreadState, up::UPSafeCell};
 
 const KERNEL_STACK_SIZE:usize=4096;
 
@@ -30,14 +30,15 @@ impl KernelStack{
     }
 }
 
-pub struct Thread<'a, P:PageTableInterface>{
-    space:Rc<RefCell<VmSpace<'a, P>>>,
+pub struct Thread{
+    state:ThreadState,
+    space:Arc<UPSafeCell<VmSpace>>,
     kernel_stack:KernelStack
 }
 
-impl <P:PageTableInterface>Thread<'_, P>{
+impl Thread{
     pub fn create_root_thread(elf_data:&[u8],bin_name:&str,stack_base:VirtAddr,stack_size:usize)->Self{
-        let mut space:VmSpace<P>=VmSpace::new();
+        let mut space:VmSpace=VmSpace::new();
         //Init User Stack
         let t=CURRENT_FRAME_ALLOCATOR.exclusive_access().allocate_frames(stack_base, stack_size).unwrap();
         let  mut stack_frames=Vec::new();
@@ -56,8 +57,21 @@ impl <P:PageTableInterface>Thread<'_, P>{
         thread_ctx.user_init(stack_base+stack_size, pc);
         kernel_stack.push_on(thread_ctx);
         Self{
-            space:Rc::new(RefCell::new(space)),
+            state:ThreadState::TS_READY,
+            space:Arc::new(unsafe{UPSafeCell::new(space)}),
             kernel_stack: kernel_stack,
         }
+    }
+    pub fn get_pagetable(&self)->PhysAddr{
+        self.space.as_ref().exclusive_access().get_pagetable()
+    }
+    pub fn get_kernel_stack(&self)->VirtAddr{
+        self.kernel_stack.sp()
+    }
+    pub fn get_state(&self)->ThreadState{
+        self.state
+    }
+    pub fn set_state(&mut self,state:ThreadState){
+        self.state=state;
     }
 }

@@ -1,5 +1,5 @@
 use cortex_a::registers::*;
-use tock_registers::{interfaces::Readable, fields::FieldValue};
+use tock_registers::{interfaces::Readable};
 
 core::arch::global_asm!(include_str!("exception_table.S"));
 

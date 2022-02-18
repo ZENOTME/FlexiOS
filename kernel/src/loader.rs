@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use lazy_static::*;
 
-use crate::{addr_space::{VmSpace, PageTableInterface}, addr_type::VirtAddr, arch::paging::{PageTable, PageTableFlags}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator}, frame::Frame};
+use crate::{addr_space::{VmSpace}, addr_type::VirtAddr, arch::paging::{ PageTableFlags}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator}, frame::Frame};
 
 pub fn get_num_app() -> usize {
     extern "C" { fn _num_app(); }
@@ -63,7 +63,7 @@ pub fn list_apps() {
     println!("**************/");
 }
 
-pub fn elf_mapper<P:PageTableInterface>(elf_data: &[u8],space:&mut VmSpace<P>)->VirtAddr{
+pub fn elf_mapper(elf_data: &[u8],space:&mut VmSpace)->VirtAddr{
     let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
     let elf_header = elf.header;
     let magic = elf_header.pt1.magic;
