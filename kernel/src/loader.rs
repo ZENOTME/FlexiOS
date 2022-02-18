@@ -70,6 +70,7 @@ pub fn elf_mapper(elf_data: &[u8],space:&mut VmSpace)->VirtAddr{
     assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
     let ph_count = elf_header.pt2.ph_count();
     for i in 0..ph_count {
+        info!("Loader Hello Elf Segement :{}",i);
         let ph = elf.program_header(i).unwrap();
         if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
             let start_va: VirtAddr = (ph.virtual_addr() as usize).into();

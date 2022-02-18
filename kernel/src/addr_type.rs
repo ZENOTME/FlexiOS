@@ -93,7 +93,7 @@ impl From<usize> for PhysAddr {
 }
 
 impl From<usize> for VirtAddr {
-    fn from(v: usize) -> Self { Self(v & ( (1 << VA_WIDTH) - 1 )) }
+    fn from(v: usize) -> Self { Self(v ) }
 }
 
 impl From<PhysAddr> for usize {

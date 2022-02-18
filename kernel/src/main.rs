@@ -63,6 +63,7 @@ pub fn kmain() -> ! {
     driver::driver_init();
     println!(">> List all app");
     loader::list_apps();
+    println!(">> usize bit {}",usize::BITS);
     println!(">> Test user mode!");
     {
         let user_data=loader::get_app_data_by_name("hello_world").unwrap();

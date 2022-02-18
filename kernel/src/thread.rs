@@ -1,5 +1,6 @@
 use core::{cell::RefCell};
 
+
 use alloc::{ vec::Vec, sync::Arc};
 use zerocopy::FromBytes;
 
@@ -22,7 +23,11 @@ impl KernelStack{
         }
     }
     pub fn sp(&self)->VirtAddr{
-        phys_to_virt(self.data.frame_addr())+self.pos
+        let sp=phys_to_virt(self.data.frame_addr());
+        let sp=sp.0+self.pos;
+        let sp=VirtAddr::from(sp);
+        sp
+        
     }
     pub fn push_on<T>(&mut self,value:T) where T:Sized+FromBytes{
         let ptr=self.data.as_type_mut::<T>(self.pos-core::mem::size_of::<T>() ).unwrap(); 
@@ -46,6 +51,7 @@ impl Thread{
             stack_frames.push(Frame::Data(_frame));
         }
         stack_frames.push(Frame::Guard(GuardFrame::new(FrameSize::Size4Kb)));
+        println!("stack page num {}",stack_frames.len());
         let stack_flag=PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::SH::INNERSHARE+PageTableFlags::AP::EL0_RW_ELX_RW+PageTableFlags::UXN::SET+PageTableFlags::PXN::SET;
         space.map_range(stack_base, stack_size, stack_frames, Some(stack_flag));
         //Load Binary
@@ -67,6 +73,7 @@ impl Thread{
     }
     pub fn get_kernel_stack(&self)->VirtAddr{
         self.kernel_stack.sp()
+
     }
     pub fn get_state(&self)->ThreadState{
         self.state

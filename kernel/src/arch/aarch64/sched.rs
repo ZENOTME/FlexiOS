@@ -3,13 +3,12 @@ use core::ops::{Index, IndexMut};
 use cortex_a::registers::TTBR0_EL1;
 use zerocopy::FromBytes;
 
-use crate::addr_type::{VirtAddr, PhysAddr};
+use crate::{addr_type::{VirtAddr, PhysAddr}, println};
 
-use super::{paging::PageTable, eret_to_thread};
+use super::{ eret_to_thread};
 
 const REG_NUM:usize=35;
 const SPSR_EL1_EL0t:usize=0b0000;
-use lazy_static::*;
 
 
 //----------

@@ -97,7 +97,7 @@ impl FrameAllocator for StackFrameAllocator{
     }
     fn allocate_frames(& self,va:VirtAddr,size:usize) -> Result<Vec<DataFrame>, FrameAllocError> {
         //round up to 4Kb
-        let size=((size+4095)/4096)*4096;
+        let size=(size+4095)/4096;
         
         let mut frames=Vec::new();
         let ans=huge_page_alloc_algroithm(va.num(),self.current.get().num(),size);

@@ -50,14 +50,14 @@ impl Scheduler for SimpleScduler{
                 other=>{}
             }
             for (pos,_e) in self.queue.iter().enumerate(){
-                if cur!=pos && _e.get_state()==ThreadState::TS_WAITING{
+                if cur!=pos && _e.get_state()==ThreadState::TS_READY{
                     switch_to_vmspace(_e.get_pagetable());
                     switch_to_context(_e.get_kernel_stack());
                 }
             }
         }else{ 
             for _e in self.queue.iter(){
-                if _e.get_state()==ThreadState::TS_WAITING{
+                if _e.get_state()==ThreadState::TS_READY{
                     switch_to_vmspace(_e.get_pagetable());
                     switch_to_context(_e.get_kernel_stack());
                 }
