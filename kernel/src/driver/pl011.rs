@@ -1,4 +1,4 @@
-const PL01_BASE:usize=0x900_0000;
+const PL01_BASE:usize=0xffff_0000_0900_0000;
 const CLOCK_BASE:usize=24000000;
 const BAUDRATE:usize=115200;
 

@@ -1,4 +1,4 @@
-use core::{cell::{RefCell, Cell}, cmp};
+use core::{cell::{RefCell, Cell}};
 
 
 use crate::{addr_type::*, frame::*};
@@ -9,10 +9,10 @@ use lazy_static::*;
 /// -------------------------
 /// frame allocator interface
 /// -------------------------
-pub trait FrameAllocator {
+pub trait FrameAllocator{
     fn create_allocator(baddr:PhysAddr,eaddr:PhysAddr)->Self;
     fn allocate_single_frame(& self, size:FrameSize) -> Result<DataFrame,FrameAllocError>;
-    fn allocate_frames(& self,va:VirtAddr,size:usize) -> Result<Vec<DataFrame>, FrameAllocError>;
+    fn allocate_frames<P:Addr>(& self,va:P,size:u64) -> Result<Vec<DataFrame>, FrameAllocError>;
     fn deallocate_frame(& self, pf: &DataFrame);
 }
 
@@ -37,10 +37,10 @@ lazy_static!{
             fn end();
         }
         // Aligned
-        let mut baddr=end as usize-KERNEL_BASE;
+        let mut baddr=end as u64-KERNEL_BASE;
         baddr=(baddr+4096*512-1)/(4096*512)*(4096*512); 
-        let baddr=PhysAddr::from(baddr);
-        let eaddr=PhysAddr::from(MEMORY_END);
+        let baddr=PhysAddr::new(baddr);
+        let eaddr=PhysAddr::new(MEMORY_END);
         UPSafeCell::new(StackFrameAllocator::create_allocator(baddr,eaddr))
     };
 }
@@ -62,13 +62,13 @@ pub struct StackFrameAllocator {
 impl StackFrameAllocator{
     // FOR DEBUG
     pub fn print_state(&self){
-        println!("curretn:{:x} end:{:x}",self.current.get().0,self.end.0);
+        println!("curretn:{:x} end:{:x}",self.current.get().addr(),self.end.addr());
     }
     //Not recycled!
     fn new_single_frame(&self,size:FrameSize)->Result<DataFrame,FrameAllocError>{
-        if (self.current.get().0 & (size as usize -1)) !=0 {return Err(FrameAllocError::AlignedError);}
-        if self.current.get()+size as usize > self.end {return Err(FrameAllocError::CapNotEnoughError);}
-        let pa=self.current.replace(self.current.get()+size as usize);
+        if (self.current.get().addr() & (size as u64 -1)) !=0 {return Err(FrameAllocError::AlignedError);}
+        if self.current.get()+size as u64 > self.end {return Err(FrameAllocError::CapNotEnoughError);}
+        let pa=self.current.replace(self.current.get()+size as u64);
         return Ok(DataFrame::new(pa,size));
     }
 }
@@ -95,7 +95,7 @@ impl FrameAllocator for StackFrameAllocator{
             }
         }
     }
-    fn allocate_frames(& self,va:VirtAddr,size:usize) -> Result<Vec<DataFrame>, FrameAllocError> {
+    fn allocate_frames<P:Addr>(& self,va:P,size:u64) -> Result<Vec<DataFrame>, FrameAllocError> {
         //round up to 4Kb
         let size=(size+4095)/4096;
         
@@ -160,15 +160,15 @@ impl FrameAllocator for StackFrameAllocator{
 // return Vec<FrameSize> Ex:
 // |4Kb|2Mb|1Gb|2Mb|4Kb|
 //-------------------
-fn huge_page_alloc_algroithm(vn:usize,pn:usize,n:usize)->VecDeque<FrameSize>{
+fn huge_page_alloc_algroithm(vn:u64,pn:u64,n:u64)->VecDeque<FrameSize>{
     //Hard Code
-    let aligns:[usize;3]=[512*512,512,1];
+    let aligns:[u64;3]=[512*512,512,1];
     let mut ans:VecDeque<FrameSize>=VecDeque::new();
     for (pos,align) in aligns.iter().enumerate(){
         if (vn % align) != (pn % align) || n<*align {
             continue;
         }
-        let (mut ve_prev,mut vs_prev):(Option<usize>,Option<usize>) = (None,None);
+        let (mut ve_prev,mut vs_prev):(Option<u64>,Option<u64>) = (None,None);
         for j in pos..aligns.len(){
             let align=aligns[j];
             let ve_cur = ((vn+align-1)/align)*align;
@@ -207,9 +207,9 @@ impl UnsafePageAlloctor for StackFrameAllocator{
         if let Some(pa) = self.recycled[0].borrow_mut().pop(){
             return Ok(pa);
         }else{
-            if (self.current.get().0 & (FrameSize::Size4Kb as usize-1)) !=0 {println!("0x{:x}",self.current.get().0);return Err(FrameAllocError::AlignedError);}
-            if (self.current.get()+FrameSize::Size4Kb as usize) > self.end {return Err(FrameAllocError::CapNotEnoughError);}
-            let pa=self.current.replace(self.current.get()+FrameSize::Size4Kb as usize);
+            if (self.current.get().addr() & (FrameSize::Size4Kb as u64-1)) !=0 {println!("0x{:x}",self.current.get().addr());return Err(FrameAllocError::AlignedError);}
+            if (self.current.get()+FrameSize::Size4Kb as u64) > self.end {return Err(FrameAllocError::CapNotEnoughError);}
+            let pa=self.current.replace(self.current.get()+FrameSize::Size4Kb as u64);
             return Ok(pa);
         }
     }

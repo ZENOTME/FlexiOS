@@ -27,6 +27,7 @@
 .macro handle_entry label
     .align 7
 	exception_enter
+	mov x0,sp
 	bl	\label
 	exception_exit
 .endm

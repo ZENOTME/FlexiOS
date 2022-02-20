@@ -27,11 +27,11 @@ core::arch::global_asm!(include_str!("boot.s"));
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn clear_bss() {
-    let start = sbss as usize;
-    let end = ebss as usize;
-    let step = core::mem::size_of::<usize>();
+    let start = sbss as u64;
+    let end = ebss as u64;
+    let step = core::mem::size_of::<u64>();
     for i in (start..end).step_by(step) {
-        unsafe { (i as *mut usize).write(0) };
+        unsafe { (i as *mut u64).write(0) };
     }
 }
 
@@ -44,7 +44,7 @@ extern "C" fn create_init_paging() {
     let p1 = unsafe { &mut *(page_table_lvl1 as *mut PageTable) };
     let ppn_lvl1:PhysAddr;
     unsafe{
-        ppn_lvl1 = PhysAddr::from(page_table_lvl1 as usize);
+        ppn_lvl1 = PhysAddr::new(page_table_lvl1 as u64);
     }
     p0.zero();
     p1.zero();
@@ -55,12 +55,12 @@ extern "C" fn create_init_paging() {
     // 0x8000_0000_0000 ~ 0x8080_0000_0000
     p0[256].set_table_page(ppn_lvl1, None);
     // 0x0000_0000 ~ 0x4000_0000
-    p1[1].set_huge_page(PhysAddr::from(MEMORY_START as usize), 
+    p1[1].set_huge_page(PhysAddr::new(MEMORY_START as u64), 
         Some(block_flags+PageTableFlags::SH::INNERSHARE+PageTableFlags::ATTR_INDEX.val(0)+PageTableFlags::AF::SET)
     );
     // 0x4000_0000 ~ 0x8000_0000
     p1[0].set_huge_page(
-        PhysAddr::from(PERIPHERALS_START as usize),
+        PhysAddr::new(PERIPHERALS_START as u64),
         Some(block_flags + PageTableFlags::PXN::SET+PageTableFlags::SH::OUTERSHARE+PageTableFlags::ATTR_INDEX.val(1)+PageTableFlags::AF::SET)
     );
 }

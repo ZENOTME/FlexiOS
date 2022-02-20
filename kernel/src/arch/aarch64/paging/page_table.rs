@@ -1,12 +1,12 @@
 use core::{
     fmt,
-    ops::{Index,IndexMut}, panic
+    ops::{Index,IndexMut},
 };
 
 use tock_registers::{register_bitfields,fields::FieldValue};
 use zerocopy::FromBytes;
 
-use crate::{addr_type::{PhysAddr, VirtAddr, Addr}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, UnsafePageAlloctor}, addr_space::{VmRegion}, frame::{Frame, FrameSize}, logging::print, println};
+use crate::{addr_type::{PhysAddr, Addr, phys_to_kernel}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, UnsafePageAlloctor}, addr_space::{VmRegion}, frame::{Frame, FrameSize}, println};
 
 // -----------------------
 // Page Entry Flags 
@@ -117,7 +117,7 @@ impl PageTableEntry {
     /// Returns the physical address mapped by this entry, might be zero.
     #[inline]
     pub fn addr(&self) -> PhysAddr {
-        PhysAddr::from((self.entry & ADDR_MASK) as usize)
+        PhysAddr::new((self.entry & ADDR_MASK) as u64)
     }
 
     /// Get the page_table
@@ -133,23 +133,30 @@ impl PageTableEntry {
     /// Returns whether this entry is mapped to a huge page.
     #[inline]
     pub fn is_huge_page(&self) -> bool {
-        self.is_valid()&&!(self.flags().matches_any(PageTableFlags::TABLE_OR_BLOCK::SET.value))
+        self.is_valid()&&!self.is_table_or_page()
     }
     // Returns whether this entry is mapped to a table or a page.
     #[inline]
     pub fn is_table_page(&self) -> bool {
-        self.is_valid()&&self.flags().matches_any(PageTableFlags::TABLE_OR_BLOCK::SET.value)
+        self.is_valid()&&self.is_table_or_page()
     }
+
+    // Return whether this entry is table or page
+    #[inline]
+    fn is_table_or_page(&self)->bool{
+        PageTableFlags::TABLE_OR_BLOCK::SET.matches_all(self.flags().value)
+    }
+    
     /// Return whether this entry is valid
     #[inline]
     pub fn is_valid(&self) -> bool{
-        self.flags().matches_any(PageTableFlags::VALID::SET.value)
+        PageTableFlags::VALID::SET.matches_all(self.flags().value)
     }
 
     /// Map the entry to the specified physical address with the specified flags.
     #[inline]
     fn set_ppn(&mut self, pa: PhysAddr, flags: PageTableFlagsField) {
-        let t:usize=pa.0;
+        let t:u64=pa.addr();
         self.entry = (t as u64)|flags.value ;
     }
     pub fn set_table_page(&mut self, pa: PhysAddr, flags: Option<PageTableFlagsField>) {
@@ -238,11 +245,11 @@ impl PageTable {
     // Only the root_pagetable can use 
     // Find the entry of va at layer and crate it if doesn't exist
     // 0 (root) | 1 (1G) | 2 (2M) | 3(4KB) 
-    fn find_entry<'a>(&'a mut self,va:VirtAddr,layer:usize)->Result<&'a mut PageTableEntry,&str> {
+    fn find_entry<'a>(&'a mut self,va:u64,layer:usize)->Result<&'a mut PageTableEntry,&str> {
         let mut current_table:&mut Self=self;
         for _i in 0..layer {
             if let Some(table) = current_table[pg_index(va, _i)].get_table(){
-                current_table=unsafe { &mut *(table.0 as *mut PageTable) };
+                current_table=unsafe { &mut *(phys_to_kernel(table).addr() as *mut PageTable) };
             }else{
                 let new_page;
                 if let Ok(pa)=CURRENT_FRAME_ALLOCATOR.exclusive_access().unsafe_alloc_page(){
@@ -252,7 +259,7 @@ impl PageTable {
                 }
                 current_table[pg_index(va, _i)].set_table_page(new_page, None);
                 let table=current_table[pg_index(va, _i)].get_table().unwrap();
-                current_table=unsafe { &mut *(table.0 as *mut PageTable) };
+                current_table=unsafe { &mut *(phys_to_kernel(table).addr() as *mut PageTable) };
                 current_table.zero();
             }
 
@@ -265,7 +272,7 @@ impl PageTable {
         let mut va=region.start();
         let flag=region.flag();
         for _e in region.get_frames(){
-            let sz=_e.frame_size() as usize;
+            let sz=_e.frame_size() as u64;
             let layer=match _e.frame_size(){
                  FrameSize::Size4Kb => 3,
                  FrameSize::Size2Mb => 2,
@@ -294,7 +301,7 @@ impl PageTable {
         }
     }
 
-    pub fn unmap(&mut self,region:&VmRegion) {
+    pub fn unmap<T:Addr>(&mut self,region:&VmRegion) {
         todo!()
     }
 }
@@ -316,20 +323,24 @@ impl IndexMut<usize> for PageTable {
 
 impl fmt::Debug for PageTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.entries[..].fmt(f)
+        for (pos,_e) in self.entries.iter().enumerate(){
+            f.write_fmt(format_args!("{}:{:?}\n",pos,_e));
+        }
+        f.write_fmt(format_args!(""))
     }
 }
 
 
 // inlince way 
 #[inline]
-fn pg_index(va:VirtAddr,idx:usize)->usize{
-    match idx{
-        0=>(va.0>>12>>9>>9>>9)&0x1ff,
-        1=>(va.0>>12>>9>>9)&0x1ff,
-        2=>(va.0>>12>>9)&0x1ff,
-        3=>(va.0>>12)&0x1ff,
+fn pg_index(addr:u64,idx:usize)->usize{
+    let r=match idx{
+        0=>(addr>>12>>9>>9>>9)&0x1ff,
+        1=>(addr>>12>>9>>9)&0x1ff,
+        2=>(addr>>12>>9)&0x1ff,
+        3=>(addr>>12)&0x1ff,
         _other=>0
-    }
+    };
+    r as usize
 }
 

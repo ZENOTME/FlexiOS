@@ -1,9 +1,9 @@
-use core::ops::{Index, IndexMut};
+use core::ops::{Index, IndexMut, Add};
 
-use cortex_a::registers::{TTBR0_EL1, TTBR1_EL1};
+use cortex_a::registers::{TTBR0_EL1};
 use zerocopy::FromBytes;
 
-use crate::{addr_type::{VirtAddr, PhysAddr}, println};
+use crate::{addr_type::{PhysAddr, Addr, UserAddr, KernelAddr}, println};
 
 use super::{ eret_to_thread};
 
@@ -79,21 +79,32 @@ impl ThreadCtx{
             reg: [0;REG_NUM],
         }
     }
-    pub fn user_init(&mut self,stack:VirtAddr,pc:VirtAddr){
-        self[RegType::SP_EL0]=stack.0 as u64;
+    pub fn user_init(&mut self,stack:UserAddr,pc:UserAddr){
+        self[RegType::SP_EL0]=stack.addr() as u64;
         self[RegType::SPSR_EL1]=SPSR_EL1_EL0t as u64;
-        self[RegType::ELR_EL1]=pc.0 as u64;
+        self[RegType::ELR_EL1]=pc.addr() as u64;
+		println!("pc:{:#x}",pc.addr());
     }
 }
 
 
 
 pub fn switch_to_vmspace(addr:PhysAddr){
-    TTBR0_EL1.set_baddr(addr.0 as u64);
+	TTBR0_EL1.set_baddr(addr.addr());
+	unsafe {
+        llvm_asm!(
+            "dsb sy
+			 tlbi vmalle1is
+			 dsb sy
+			 isb
+			 "
+            :::: "volatile"
+        );
+    }
 	//TTBR1_EL1.set_baddr(addr.0 as u64);
 }
-pub fn switch_to_context(addr:VirtAddr){
-    unsafe{eret_to_thread(addr.0);}
+pub fn switch_to_context(addr:KernelAddr){
+    unsafe{eret_to_thread(addr.addr());}
 }
 
 

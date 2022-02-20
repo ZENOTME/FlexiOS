@@ -1,5 +1,6 @@
 use core::fmt::{self, Debug, Formatter};
 use core::ops::{Add,AddAssign,Sub,SubAssign};
+
 /// Re-export the mm_type const
 pub use crate::arch::mm_type::{
     PAGE_SIZE,PAGE_SIZE_BITS,PA_WIDTH,VA_WIDTH,KERNEL_BASE
@@ -7,16 +8,17 @@ pub use crate::arch::mm_type::{
 pub use crate::arch::board::MEMORY_END;
 pub use crate::arch::paging::PageTableFlags;
 
+
 // ------------------
 // General Addr Trait
 //-------------------
 #[inline]
-pub fn floor(addr:usize,align:usize)->usize{
+pub fn floor(addr:u64,align:u64)->u64{
     debug_assert!(align.is_power_of_two(), "`align` must be a power of two");
     addr & !(align-1)
 }
 #[inline]
-pub fn ceil(addr: usize, align: usize) -> usize {
+pub fn ceil(addr: u64, align: u64) -> u64 {
     debug_assert!(align.is_power_of_two(), "`align` must be a power of two");
     let align_mask = align - 1;
     if addr & align_mask == 0 {
@@ -25,60 +27,120 @@ pub fn ceil(addr: usize, align: usize) -> usize {
         (addr | align_mask) + 1
     }
 }
+
 pub trait Addr{
-    fn addr(&self)->usize;
-    fn new(v:usize)->Self;
-    fn floor(&self,align:usize) -> Self where Self: Sized{
-        Self::new(floor(self.addr(),align))
-    }
-    fn ceil(&self,align:usize) -> Self where Self: Sized { 
-        Self::new(ceil(self.addr(),align))
-    }
-    fn offset(&self,align:usize) -> usize { 
+    fn base()->u64 where Self:Sized;
+    fn addr(&self)->u64 where Self:Sized;
+
+    fn offset(&self,align:u64) -> u64 where Self:Sized{ 
         self.addr() & (align - 1) 
     }
-    fn num(&self) -> usize { 
-        self.addr() >> PAGE_SIZE_BITS
+    fn num(&self) -> u64 where Self:Sized{ 
+        self.addr() >> 12
     }
-    fn is_aligned(&self,align:usize) -> bool { 
+    fn is_aligned(&self,align:u64) -> bool where Self:Sized{ 
         self.offset(align) == 0 
     }
 }
+const BASE_CLEAR_MASK:u64=0x0000_ffff_ffff_ffff;
+
 
 
 /// ---------------
-/// Addr Definitions
+/// PhyAddr Definitions
 /// ---------------
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct PhysAddr(pub usize);
+pub struct PhysAddr(u64);
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct VirtAddr(pub usize);
+pub struct KernelAddr(u64);
 
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct UserAddr(u64);
+
+//Addr trait
 impl Addr for PhysAddr{
-    fn new(v:usize)->Self{
-        PhysAddr::from(v)    
+    #[inline]
+    fn base()->u64{
+        0
     }
-
-    fn addr(&self)->usize {
+    #[inline]
+    fn addr(&self)->u64 {
         self.0
     }
 }
 
-impl Addr for VirtAddr{
-    fn new(v:usize)->Self{
-        VirtAddr::from(v)    
+impl PhysAddr{
+    pub fn new(addr:u64)->Self{
+        let addr=addr&BASE_CLEAR_MASK;
+        Self(addr|Self::base()) 
     }
+    pub fn floor(&self,align:u64) -> Self{
+        Self::new(floor(self.addr(),align))
+    }
+    pub fn ceil(&self,align:u64) -> Self{ 
+        Self::new(ceil(self.addr(),align))
+    }
+}
 
-    fn addr(&self)->usize {
+impl Addr for KernelAddr{
+    #[inline]
+    fn base()->u64{
+        0xffff_0000_0000_0000
+    }
+    #[inline]
+    fn addr(&self)->u64 {
         self.0
     }
 }
 
+impl KernelAddr{
+    pub fn new(addr:u64)->Self where Self: Sized{
+        let addr=addr&BASE_CLEAR_MASK;
+        Self(addr|Self::base()) 
+    }
+    pub fn floor(&self,align:u64) -> Self{
+        Self::new(floor(self.addr(),align))
+    }
+    pub fn ceil(&self,align:u64) -> Self { 
+        Self::new(ceil(self.addr(),align))
+    }
+}
 
-impl Debug for VirtAddr {
+impl Addr for UserAddr{
+    #[inline]
+    fn base()->u64{
+        0
+    }
+    #[inline]
+    fn addr(&self)->u64 {
+        self.0
+    }
+}
+
+impl UserAddr{
+    pub fn new(addr:u64)->Self{
+        let addr=addr&BASE_CLEAR_MASK;
+        Self(addr|Self::base()) 
+    }
+    pub fn floor(&self,align:u64) -> Self{
+        Self::new(floor(self.addr(),align))
+    }
+    pub fn ceil(&self,align:u64) -> Self{ 
+        Self::new(ceil(self.addr(),align))
+    }
+}
+
+//Debug trait
+impl Debug for KernelAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("VA:{:#x}", self.0))
+        f.write_fmt(format_args!("KA:{:#x}", self.0))
+    }
+}
+
+impl Debug for UserAddr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("UA:{:#x}", self.0))
     }
 }
 
@@ -88,72 +150,96 @@ impl Debug for PhysAddr {
     }
 }
 
-impl From<usize> for PhysAddr {
-    fn from(v: usize) -> Self { Self(v & ( (1 << PA_WIDTH) - 1 )) }
-}
-
-impl From<usize> for VirtAddr {
-    fn from(v: usize) -> Self { Self(v ) }
-}
-
-impl From<PhysAddr> for usize {
+//From trait
+impl From<PhysAddr> for u64 {
     fn from(v: PhysAddr) -> Self { v.0 }
 }
 
-impl From<VirtAddr> for usize {
-    fn from(v: VirtAddr) -> Self { v.0 }
+impl From<UserAddr> for u64 {
+    fn from(v: UserAddr) -> Self { v.0 }
 }
 
+impl From<KernelAddr> for u64 {
+    fn from(v: KernelAddr) -> Self { v.0 }
+}
 
-impl Add<usize> for VirtAddr {
+//Op trait
+impl Add<u64> for PhysAddr {
     type Output = Self;
-    fn add(self, rhs: usize) -> VirtAddr {
-        VirtAddr::from(self.0 + rhs)
+    fn add(self, rhs: u64) -> PhysAddr {
+        PhysAddr::new(self.0 .checked_add(rhs).unwrap())
     }
 }
 
-impl AddAssign<usize> for VirtAddr {
-    fn add_assign(&mut self, rhs: usize) {
+impl AddAssign<u64> for PhysAddr {
+    fn add_assign(&mut self, rhs: u64) {
         *self = *self + rhs;
     }
 }
 
-impl Sub<usize> for VirtAddr {
+impl Sub<u64> for PhysAddr {
     type Output = Self;
-    fn sub(self, rhs: usize) -> Self::Output {
-        VirtAddr::from(self.0.checked_sub(rhs).unwrap())
+    fn sub(self, rhs: u64) -> Self::Output {
+        PhysAddr::new(self.0.checked_sub(rhs).unwrap())
     }
 }
 
-impl SubAssign<usize> for VirtAddr {
-    fn sub_assign(&mut self, rhs: usize) {
+impl SubAssign<u64> for PhysAddr {
+    fn sub_assign(&mut self, rhs: u64) {
         *self = *self - rhs;
     }
 }
 
 
-impl Add<usize> for PhysAddr {
+impl Add<u64> for UserAddr {
     type Output = Self;
-    fn add(self, rhs: usize) -> Self::Output {
-        PhysAddr::from(self.0 + rhs)
+    fn add(self, rhs: u64) -> UserAddr {
+        UserAddr::new(self.0 .checked_add(rhs).unwrap())
     }
 }
 
-impl AddAssign<usize> for PhysAddr {
-    fn add_assign(&mut self, rhs: usize) {
+impl AddAssign<u64> for UserAddr {
+    fn add_assign(&mut self, rhs: u64) {
         *self = *self + rhs;
     }
 }
 
-impl Sub<usize> for PhysAddr {
+impl Sub<u64> for UserAddr {
     type Output = Self;
-    fn sub(self, rhs: usize) -> Self::Output {
-        PhysAddr::from(self.0.checked_sub(rhs).unwrap())
+    fn sub(self, rhs: u64) -> Self::Output {
+        UserAddr::new(self.0.checked_sub(rhs).unwrap())
     }
 }
 
-impl SubAssign<usize> for PhysAddr {
-    fn sub_assign(&mut self, rhs: usize) {
+impl SubAssign<u64> for UserAddr {
+    fn sub_assign(&mut self, rhs: u64) {
+        *self = *self - rhs;
+    }
+}
+//
+
+impl Add<u64> for KernelAddr {
+    type Output = Self;
+    fn add(self, rhs: u64) -> KernelAddr {
+        KernelAddr::new(self.0 .checked_add(rhs).unwrap())
+    }
+}
+
+impl AddAssign<u64> for KernelAddr {
+    fn add_assign(&mut self, rhs: u64) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<u64> for KernelAddr {
+    type Output = Self;
+    fn sub(self, rhs: u64) -> Self::Output {
+        KernelAddr::new(self.0.checked_sub(rhs).unwrap())
+    }
+}
+
+impl SubAssign<u64> for KernelAddr {
+    fn sub_assign(&mut self, rhs: u64) {
         *self = *self - rhs;
     }
 }
@@ -161,12 +247,12 @@ impl SubAssign<usize> for PhysAddr {
 // -----------------
 // Transform Function
 // -----------------
-pub fn phys_to_virt(paddr:PhysAddr)->VirtAddr{
-    let t=usize::from(paddr);
-    VirtAddr(t.checked_add(KERNEL_BASE).unwrap())
+pub fn phys_to_kernel(paddr:PhysAddr)->KernelAddr{
+    let t=u64::from(paddr);
+    KernelAddr::new(t)
 }
-pub fn virt_to_phys(vaddr:VirtAddr)->PhysAddr{
-    let t=usize::from(vaddr);
-    PhysAddr(t.checked_sub(KERNEL_BASE).unwrap())
+pub fn kernel_to_phys(kaddr:KernelAddr)->PhysAddr{
+    let t=u64::from(kaddr);
+    PhysAddr::new(t)
 }
 

@@ -1,10 +1,10 @@
 
-use core::{cell::{RefCell}, marker::PhantomData, arch, fmt::{Formatter, self,Debug}};
+use core::{cell::{RefCell}, fmt::{Formatter, self,Debug}};
 
-use alloc::vec::Vec;
-use zerocopy::FromBytes;
+use alloc::{vec::Vec, sync::Arc};
+use xmas_elf::header::Data;
 
-use crate::{addr_type::{VirtAddr, PhysAddr}, frame::{Frame, DataFrame, FrameSize}, arch::paging::{PageTableFlagsField, PageTableFlags,PageTable, page_table}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, UnsafePageAlloctor, FrameAllocator}};
+use crate::{addr_type::{PhysAddr, PageTableFlags}, frame::{Frame, DataFrame, FrameSize}, arch::paging::{PageTableFlagsField,PageTable}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, FrameAllocator}};
 
 /*
 pub trait PageTableInterface:FromBytes{
@@ -18,6 +18,11 @@ pub struct VmSpace{
     page_table:DataFrame
 }
 
+pub enum  AccessSpaceError{
+    UnExisted,
+    LazyAlloced,
+}
+
 impl VmSpace{
     pub fn new()->Self{
         let page_table=CURRENT_FRAME_ALLOCATOR.exclusive_access().allocate_single_frame(FrameSize::Size4Kb).unwrap();
@@ -28,7 +33,7 @@ impl VmSpace{
             page_table: page_table,
         }
     }
-    pub fn map_range(&mut self,va:VirtAddr,len:usize,frames:Vec<Frame>,flag:Option<PageTableFlagsField>){
+    pub fn map_range(&mut self,va:u64,len:u64,frames:Vec<Frame>,flag:Option<PageTableFlagsField>){
         let region=VmRegion { vaddr:va, size:len, frames:frames, flag:flag };
         self.page_table.as_type_mut::<PageTable>(0).unwrap().map(&region);
         self.regions.borrow_mut().push(region)
@@ -36,7 +41,42 @@ impl VmSpace{
     pub fn get_pagetable(&self)->PhysAddr{
         self.page_table.frame_addr()
     }
-    pub fn find_region_mut(&self,va:VirtAddr)->&mut VmRegion{
+    pub fn print_page_table(&self){
+        let pg=self.page_table.as_type::<PageTable>(0).unwrap();
+        println!("Addr:{:?}\n{:?}",self.get_pagetable(),pg);
+    }
+
+    pub fn read_from_space(&self,buf:&mut [u8],va:u64)->Result<usize,AccessSpaceError>{
+        for _region in self.regions.borrow().iter(){
+            if _region.is_in_range(va){
+                let mut off=va-_region.start();
+                let mut len=buf.len() as u64;
+                let mut pos=0;
+                for _frame in _region.frames.iter(){
+                    let frame_size=_frame.frame_size() as u64;
+                    if len>0&&off<frame_size {
+                        off=0;
+                        match _frame{
+                            Frame::Data(data)=>{
+                                let l=if (frame_size-off) < len {frame_size-off} else {len};
+                                let src=data.as_slice::<u8>(off, l).unwrap();
+                                let dst=&mut buf[pos as usize..(pos+l) as usize];
+                                dst.copy_from_slice(src);
+                                pos+=l;
+                                len-=l;
+                            },
+                            _=>{ return Err(AccessSpaceError::UnExisted); }
+                        }
+                    }else{
+                        off=off-frame_size;
+                    }
+                }
+            }
+        }
+        Ok(0)
+    }
+
+    pub fn find_region_mut(&self,va:u64)->&mut VmRegion{
         todo!()
     }
     pub fn unmap(&self,region:&mut VmRegion){
@@ -48,8 +88,8 @@ impl VmSpace{
 }
 
 pub struct VmRegion{
-    vaddr:VirtAddr,
-    size:usize,
+    vaddr:u64,
+    size:u64,
     frames:Vec<Frame>,
     flag:Option<PageTableFlagsField>
 }
@@ -64,20 +104,25 @@ impl VmRegion{
     pub fn replace_flag(&mut self,nf:PageTableFlagsField){
         self.flag=Some(nf);
     }
-    pub fn start(&self)->VirtAddr{
+    pub fn start(&self)->u64{
         self.vaddr
     }
-    pub fn size(&self)->usize{
+    pub fn size(&self)->u64{
         self.size
     }
     pub fn flag(&self)->Option<PageTableFlagsField>{
         self.flag
     }
+    pub fn is_in_range(&self,va:u64)->bool{
+        let b=self.vaddr;
+        let e=self.vaddr+self.size;
+        va>=b && va<e
+    }
 }
 
 impl Debug for VmRegion {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{:?}\nSize:{:?}\n", self.vaddr,self.size))?;
+        f.write_fmt(format_args!("VA:{:#x}\nSize:{:?}\n", self.vaddr,self.size))?;
         for _f in self.frames.iter(){
             f.write_fmt(format_args!("Frames: Size: "))?;
             match _f.frame_size(){

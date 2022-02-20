@@ -13,7 +13,7 @@
 #![feature(llvm_asm)]
 #![feature(step_trait)]
 
-use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR, scheduler::{CURRENT_SCHEDULER, Scheduler}, consts::{ROOT_THREAD_STACK_BASE, ROOT_THREAD_STACK_SIZE}};
+use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR, scheduler::{CURRENT_SCHEDULER, Scheduler}, consts::{ROOT_THREAD_STACK_BASE, ROOT_THREAD_STACK_SIZE}, addr_type::{UserAddr, PhysAddr, PageTableFlags, Addr}};
 
 extern crate alloc;
 #[macro_use]
@@ -43,6 +43,7 @@ mod driver;
 mod frame;
 mod thread;
 mod scheduler;
+mod syscall;
 // Contemporary Loader
 
 mod loader;
@@ -51,6 +52,9 @@ use core::arch::global_asm;
 global_asm!(include_str!("link_app.S"));
 
 pub fn kmain() -> ! {
+    println!("Enter into kernel!");
+    arch::switch_to_vmspace(PhysAddr::new(0));
+
     heap_allocator::init_heap();
     logging::init();
     println!(">>LOG test..");
@@ -67,9 +71,10 @@ pub fn kmain() -> ! {
     println!(">> Test user mode!");
     {
         let user_data=loader::get_app_data_by_name("hello_world").unwrap();
-        let user_thread=thread::Thread::create_root_thread(user_data,"hello_world",ROOT_THREAD_STACK_BASE.into(),ROOT_THREAD_STACK_SIZE);
+        let user_thread=thread::Thread::create_root_thread(user_data,"hello_world",UserAddr::new(ROOT_THREAD_STACK_BASE),ROOT_THREAD_STACK_SIZE);
         CURRENT_SCHEDULER.exclusive_access().push_thread(user_thread);
-        CURRENT_SCHEDULER.exclusive_access().sched();
+        let sp=CURRENT_SCHEDULER.exclusive_access().sched().unwrap();
+        arch::switch_to_context(sp);
         panic!("TEST USER MODE NEVER GET TO HERE!!");
     }
     
