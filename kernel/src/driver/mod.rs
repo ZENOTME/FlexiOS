@@ -1,20 +1,35 @@
-mod pl011;
-use core::arch::global_asm;
-use alloc::vec;
-use pl011::pl01_init;
-pub use pl011::pl01_send;
-
-mod virtio_impl;
-
 use device_tree::{DeviceTree,Node, util::SliceRead};
 use virtio_drivers::{DeviceType, VirtIOHeader, VirtIOBlk};
+use core::arch::global_asm;
+use alloc::vec;
+use crate::arch;
+
+pub mod pl011;
+pub mod virtio_impl;
+pub mod timer;
+pub mod gic;
+pub mod console;
+
+
+pub use pl011::pl01_send;
+pub use pl011::pl01_recv;
+
+pub use timer::timer_disable;
+pub use timer::timer_enable;
+
+pub use gic::gicv2_disable;
+pub use gic::gicv2_enable;
+
 
 global_asm!(include_str!("dtb.S"));
 
 pub fn driver_init(){
     //init the serail to print
+    unsafe{arch::disable_irq();}
     unsafe{pl011::pl01_init();}
-    //
+    timer::timer_init();
+    gic::gicv2_init();
+    unsafe{arch::enable_irq();}
     init_dt();
 }
 

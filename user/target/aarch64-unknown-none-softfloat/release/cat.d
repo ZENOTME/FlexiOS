@@ -1,0 +1,1 @@
+/home/os/arm_core_lab/user/target/aarch64-unknown-none-softfloat/release/cat: /home/os/arm_core_lab/user/src/bin/cat.rs /home/os/arm_core_lab/user/src/console.rs /home/os/arm_core_lab/user/src/lang_items.rs /home/os/arm_core_lab/user/src/lib.rs /home/os/arm_core_lab/user/src/syscall.rs

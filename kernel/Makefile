@@ -12,7 +12,7 @@ ifeq ($(BSP),rpi3)
     TARGET            = aarch64-unknown-none-softfloat
     KERNEL_BIN        = kernel8.img
     QEMU_BINARY       = qemu-system-aarch64
-    QEMU_MACHINE_TYPE = virt
+    QEMU_MACHINE_TYPE = virt,gic_version=2
     QEMU_RELEASE_ARGS = -m 1G\
 			-cpu cortex-a53\
     			-nographic \
@@ -90,7 +90,7 @@ all: $(KERNEL_BIN)
 ##------------------------------------------------------------------------------
 ## Build the kernel ELF
 ##------------------------------------------------------------------------------
-$(KERNEL_ELF):virt.dtb
+$(KERNEL_ELF):
 	@echo "\nCompiling kernel - $(BSP)"
 	@RUSTFLAGS="$(RUSTFLAGS)" $(RUSTC_CMD)
 

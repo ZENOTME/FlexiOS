@@ -13,7 +13,9 @@
 #![feature(llvm_asm)]
 #![feature(step_trait)]
 
-use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR, scheduler::{CURRENT_SCHEDULER, Scheduler}, consts::{ROOT_THREAD_STACK_BASE, ROOT_THREAD_STACK_SIZE}, addr_type::{UserAddr, PhysAddr, PageTableFlags, Addr}};
+use tock_registers::interfaces::Readable;
+
+use crate::{heap_allocator::init_heap, frame_allocator::CURRENT_FRAME_ALLOCATOR, scheduler::{CURRENT_SCHEDULER, Scheduler}, consts::{ROOT_THREAD_STACK_BASE, ROOT_THREAD_STACK_SIZE}, addr_type::{UserAddr, PhysAddr, PageTableFlags, Addr}, arch::enable_irq, driver::pl01_send};
 
 extern crate alloc;
 #[macro_use]
@@ -67,7 +69,6 @@ pub fn kmain() -> ! {
     driver::driver_init();
     println!(">> List all app");
     loader::list_apps();
-    println!(">> usize bit {}",usize::BITS);
     println!(">> Test user mode!");
     {
         let user_data=loader::get_app_data_by_name("hello_world").unwrap();

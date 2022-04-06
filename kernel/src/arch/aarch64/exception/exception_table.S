@@ -23,9 +23,12 @@
 */
 
 //=================================================
+.macro exception_entry label
+.align 7
+	b	\label
+.endm
 
 .macro handle_entry label
-    .align 7
 	exception_enter
 	mov x0,sp
 	bl	\label
@@ -105,28 +108,41 @@
  * 		+0x780	|	SError/vSError		|
  * ============================================================================
  */
-.align	11
+.align	12
 el1_vector:
- handle_entry syn_exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
+ exception_entry syn_exception
+ exception_entry irq
+ exception_entry frq
+ exception_entry serror
 
- handle_entry syn_exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
+ exception_entry syn_exception
+ exception_entry irq
+ exception_entry frq
+ exception_entry serror
 
- handle_entry syn_exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
+ exception_entry syn_exception
+ exception_entry irq
+ exception_entry frq
+ exception_entry serror
 
- handle_entry syn_exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
- handle_entry exception_handler
+ exception_entry syn_exception
+ exception_entry irq
+ exception_entry frq
+ exception_entry serror
 
+
+//=============================
+syn_exception:
+	handle_entry syn_exception_handler
+irq:
+	handle_entry irq_handler
+frq:
+	handle_entry frq_handler
+serror:
+	handle_entry serror_handler
+
+
+//================================
 set_exception_vector:
     adr	x0, el1_vector
 	msr	vbar_el1, x0

@@ -10,15 +10,15 @@ SECTIONS
         *(.text.entry)
         *(.text .text.*)
     }
-    .rodata : {
+    .rodata : ALIGN(0x1000){
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
     }
-    .data : {
+    .data : ALIGN(0x1000){
         *(.data .data.*)
         *(.sdata .sdata.*)
     }
-    .bss : {
+    .bss : ALIGN(0x1000){
         start_bss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
