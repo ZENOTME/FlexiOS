@@ -1,15 +1,20 @@
 use core::{
     fmt,
-    ops::{Index,IndexMut},
+    ops::{Index, IndexMut},
 };
 
-use tock_registers::{register_bitfields,fields::FieldValue};
+use tock_registers::{fields::FieldValue, register_bitfields};
 use zerocopy::FromBytes;
 
-use crate::{addr_type::{PhysAddr, Addr, phys_to_kernel}, frame_allocator::{CURRENT_FRAME_ALLOCATOR, UnsafePageAlloctor}, addr_space::{VmRegion}, frame::{Frame, FrameSize}, println};
+use crate::{
+    addr_space::VmRegion,
+    addr_type::{phys_to_kernel, Addr, PhysAddr},
+    frame::{FrameObj, FrameSize},
+    frame_allocator::{UnsafePageAlloctor, CURRENT_FRAME_ALLOCATOR},
+};
 
 // -----------------------
-// Page Entry Flags 
+// Page Entry Flags
 // -----------------------
 
 register_bitfields! [
@@ -52,7 +57,7 @@ register_bitfields! [
         /// Execute-never/Unprivileged execute-never
         UXN OFFSET(54) NUMBITS(1)[],
         /// Software dirty bit
-        DIRTY OFFSET(55) NUMBITS(1)[],          
+        DIRTY OFFSET(55) NUMBITS(1)[],
         /// Software swapped bit
         SWAPPED OFFSET(56) NUMBITS(1)[],
         /// Software writable shared bit for COW
@@ -62,17 +67,16 @@ register_bitfields! [
         /// Privileged Execute-never for table descriptors
         PXNTable OFFSET(59) NUMBITS(1)[],
         /// Execute-never/Unprivileged execute-never for table descriptors
-        XNTable OFFSET(60) NUMBITS(1)[],        
+        XNTable OFFSET(60) NUMBITS(1)[],
         /// Access permission: access at EL0 not permitted
-        APTable_nEL0 OFFSET(61) NUMBITS(1)[],  
+        APTable_nEL0 OFFSET(61) NUMBITS(1)[],
         /// Access permission: read-only
-        APTable_RO OFFSET(62) NUMBITS(1)[],     
+        APTable_RO OFFSET(62) NUMBITS(1)[],
         /// Non-secure bit
-        NSTable OFFSET(63) NUMBITS(1)[],        
+        NSTable OFFSET(63) NUMBITS(1)[],
     ]
 ];
-pub type PageTableFlagsField=FieldValue<u64,PageTableFlags::Register>;
-
+pub type PageTableFlagsField = FieldValue<u64, PageTableFlags::Register>;
 
 // ----------------------------
 // A 64-bit page table entry.
@@ -82,8 +86,7 @@ pub type PageTableFlagsField=FieldValue<u64,PageTableFlags::Register>;
 pub const ADDR_MASK: u64 = 0x0000_ffff_ffff_f000;
 pub const PGFLAG_MASK: u64 = 0xffff_0000_0000_0fff;
 
-
-#[derive(Clone, Copy,FromBytes)]
+#[derive(Clone, Copy, FromBytes)]
 #[repr(transparent)]
 pub struct PageTableEntry {
     entry: u64,
@@ -111,7 +114,7 @@ impl PageTableEntry {
     /// Returns the flags of this entry.
     #[inline]
     pub fn flags(&self) -> PageTableFlagsField {
-        PageTableFlagsField::new(PGFLAG_MASK,0,self.entry)
+        PageTableFlagsField::new(PGFLAG_MASK, 0, self.entry)
     }
 
     /// Returns the physical address mapped by this entry, might be zero.
@@ -123,9 +126,9 @@ impl PageTableEntry {
     /// Get the page_table
     pub fn get_table(&self) -> Option<PhysAddr> {
         if self.is_table_page() {
-            let pa=self.addr();
+            let pa = self.addr();
             Some(pa)
-        }else{
+        } else {
             None
         }
     }
@@ -133,63 +136,62 @@ impl PageTableEntry {
     /// Returns whether this entry is mapped to a huge page.
     #[inline]
     pub fn is_huge_page(&self) -> bool {
-        self.is_valid()&&!self.is_table_or_page()
+        self.is_valid() && !self.is_table_or_page()
     }
     // Returns whether this entry is mapped to a table or a page.
     #[inline]
     pub fn is_table_page(&self) -> bool {
-        self.is_valid()&&self.is_table_or_page()
+        self.is_valid() && self.is_table_or_page()
     }
 
     // Return whether this entry is table or page
     #[inline]
-    fn is_table_or_page(&self)->bool{
+    fn is_table_or_page(&self) -> bool {
         PageTableFlags::TABLE_OR_BLOCK::SET.matches_all(self.flags().value)
     }
-    
+
     /// Return whether this entry is valid
     #[inline]
-    pub fn is_valid(&self) -> bool{
+    pub fn is_valid(&self) -> bool {
         PageTableFlags::VALID::SET.matches_all(self.flags().value)
     }
 
     /// Map the entry to the specified physical address with the specified flags.
     #[inline]
     fn set_ppn(&mut self, pa: PhysAddr, flags: PageTableFlagsField) {
-        let t:u64=pa.addr();
-        self.entry = (t as u64)|flags.value ;
+        let t: u64 = pa.addr();
+        self.entry = (t as u64) | flags.value;
     }
     pub fn set_table_page(&mut self, pa: PhysAddr, flags: Option<PageTableFlagsField>) {
-        let new_flags=if let Some(flags)=flags{
-            flags+PageTableFlags::TABLE_OR_BLOCK::SET+PageTableFlags::VALID::SET
-        }else{
-            PageTableFlags::TABLE_OR_BLOCK::SET+PageTableFlags::VALID::SET
+        let new_flags = if let Some(flags) = flags {
+            flags + PageTableFlags::TABLE_OR_BLOCK::SET + PageTableFlags::VALID::SET
+        } else {
+            PageTableFlags::TABLE_OR_BLOCK::SET + PageTableFlags::VALID::SET
         };
         debug_assert!(new_flags.matches_any(PageTableFlags::TABLE_OR_BLOCK::SET.value));
         self.set_ppn(pa, new_flags);
     }
-    pub fn set_huge_page(&mut self,pa:PhysAddr,flags: Option<PageTableFlagsField>){
-        let new_flags=if let Some(flags)=flags{
-            flags+PageTableFlags::TABLE_OR_BLOCK::CLEAR+PageTableFlags::VALID::SET
-        }else{
-            PageTableFlags::TABLE_OR_BLOCK::CLEAR+PageTableFlags::VALID::SET
+    pub fn set_huge_page(&mut self, pa: PhysAddr, flags: Option<PageTableFlagsField>) {
+        let new_flags = if let Some(flags) = flags {
+            flags + PageTableFlags::TABLE_OR_BLOCK::CLEAR + PageTableFlags::VALID::SET
+        } else {
+            PageTableFlags::TABLE_OR_BLOCK::CLEAR + PageTableFlags::VALID::SET
         };
         debug_assert!(!new_flags.matches_any(PageTableFlags::TABLE_OR_BLOCK::SET.value));
         self.set_ppn(pa, new_flags);
     }
     // Set flag
-    pub fn set_flags(&mut self,flags:Option<PageTableFlagsField>){
-        let flags=if let Some(f)=flags{
-            f+PageTableFlags::VALID::SET
-        }else{
+    pub fn set_flags(&mut self, flags: Option<PageTableFlagsField>) {
+        let flags = if let Some(f) = flags {
+            f + PageTableFlags::VALID::SET
+        } else {
             PageTableFlags::VALID::SET
         };
         self.entry = (self.entry & !PGFLAG_MASK) | flags.value;
     }
-    pub fn clear(&mut self){
-        self.entry=0;
+    pub fn clear(&mut self) {
+        self.entry = 0;
     }
-
 }
 
 impl fmt::Debug for PageTableEntry {
@@ -205,9 +207,8 @@ impl fmt::Debug for PageTableEntry {
 /// The number of entries in a page table.
 const ENTRY_COUNT: usize = 512;
 
-
 // ----------
-// PageTable 
+// PageTable
 // ----------
 
 #[repr(align(4096))]
@@ -241,71 +242,71 @@ impl PageTable {
         self.entries.iter_mut()
     }
 
-
-    // Only the root_pagetable can use 
+    // Only the root_pagetable can use
     // Find the entry of va at layer and crate it if doesn't exist
-    // 0 (root) | 1 (1G) | 2 (2M) | 3(4KB) 
-    fn find_entry<'a>(&'a mut self,va:u64,layer:usize)->Result<&'a mut PageTableEntry,&str> {
-        let mut current_table:&mut Self=self;
+    // 0 (root) | 1 (1G) | 2 (2M) | 3(4KB)
+    fn find_entry<'a>(&'a mut self, va: u64, layer: usize) -> Result<&'a mut PageTableEntry, &str> {
+        let mut current_table: &mut Self = self;
         for _i in 0..layer {
-            if let Some(table) = current_table[pg_index(va, _i)].get_table(){
-                current_table=unsafe { &mut *(phys_to_kernel(table).addr() as *mut PageTable) };
-            }else{
+            if let Some(table) = current_table[pg_index(va, _i)].get_table() {
+                current_table = unsafe { &mut *(phys_to_kernel(table).addr() as *mut PageTable) };
+            } else {
                 let new_page;
-                if let Ok(pa)=CURRENT_FRAME_ALLOCATOR.exclusive_access().unsafe_alloc_page(){
-                    new_page=pa;
-                }else{
+                if let Ok(pa) = CURRENT_FRAME_ALLOCATOR
+                    .exclusive_access()
+                    .unsafe_alloc_page()
+                {
+                    new_page = pa;
+                } else {
                     return Err("PageTable:find_entry:Can't not allocate new page");
                 }
                 current_table[pg_index(va, _i)].set_table_page(new_page, None);
-                let table=current_table[pg_index(va, _i)].get_table().unwrap();
-                current_table=unsafe { &mut *(phys_to_kernel(table).addr() as *mut PageTable) };
+                let table = current_table[pg_index(va, _i)].get_table().unwrap();
+                current_table = unsafe { &mut *(phys_to_kernel(table).addr() as *mut PageTable) };
                 current_table.zero();
             }
-
         }
         Ok(&mut current_table[pg_index(va, layer)])
     }
 
     //PageTableInterface
-    pub fn map(&mut self,region:&VmRegion) {
-        let mut va=region.start();
-        let flag=region.flag();
-        for _e in region.get_frames(){
-            let sz=_e.frame_size() as u64;
-            let layer=match _e.frame_size(){
-                 FrameSize::Size4Kb => 3,
-                 FrameSize::Size2Mb => 2,
-                 FrameSize::Size1Gb => 1
-             }; 
-            let entry =self.find_entry(va, layer).unwrap();
-            match _e{
-                Frame::Data(data_frame) => {
-                    let pa=data_frame.frame_addr();
-                    if layer==3 {
+    pub fn map(&mut self, region: &VmRegion) {
+        let mut va = region.start();
+        let flag = region.flag();
+        for _e in region.get_frames() {
+            let sz = _e.frame_size() as u64;
+            let layer = match _e.frame_size() {
+                FrameSize::Size4Kb => 3,
+                FrameSize::Size2Mb => 2,
+                FrameSize::Size1Gb => 1,
+            };
+            let entry = self.find_entry(va, layer).unwrap();
+            match _e {
+                FrameObj::Data(data_frame) => {
+                    let pa = data_frame.frame_addr();
+                    if layer == 3 {
                         entry.set_table_page(pa, flag);
-                    }else{
-                        entry.set_huge_page(pa,flag);
+                    } else {
+                        entry.set_huge_page(pa, flag);
                     }
-                    va+=sz;
+                    va += sz;
                 }
-                Frame::Guard(guard_frame) => {
+                FrameObj::Guard(guard_frame) => {
                     entry.set_flags(flag);
-                    va+=sz;  
-                },
-                Frame::Lazy(_) => {
+                    va += sz;
+                }
+                FrameObj::Lazy(_) => {
                     entry.set_flags(flag);
-                    va+=sz;
-                },   
+                    va += sz;
+                }
             }
         }
     }
 
-    pub fn unmap<T:Addr>(&mut self,region:&VmRegion) {
+    pub fn unmap<T: Addr>(&mut self, region: &VmRegion) {
         todo!()
     }
 }
-
 
 impl Index<usize> for PageTable {
     type Output = PageTableEntry;
@@ -323,24 +324,22 @@ impl IndexMut<usize> for PageTable {
 
 impl fmt::Debug for PageTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (pos,_e) in self.entries.iter().enumerate(){
-            f.write_fmt(format_args!("{}:{:?}\n",pos,_e));
+        for (pos, _e) in self.entries.iter().enumerate() {
+            f.write_fmt(format_args!("{}:{:?}\n", pos, _e));
         }
         f.write_fmt(format_args!(""))
     }
 }
 
-
-// inlince way 
+// inlince way
 #[inline]
-fn pg_index(addr:u64,idx:usize)->usize{
-    let r=match idx{
-        0=>(addr>>12>>9>>9>>9)&0x1ff,
-        1=>(addr>>12>>9>>9)&0x1ff,
-        2=>(addr>>12>>9)&0x1ff,
-        3=>(addr>>12)&0x1ff,
-        _other=>0
+fn pg_index(addr: u64, idx: usize) -> usize {
+    let r = match idx {
+        0 => (addr >> 12 >> 9 >> 9 >> 9) & 0x1ff,
+        1 => (addr >> 12 >> 9 >> 9) & 0x1ff,
+        2 => (addr >> 12 >> 9) & 0x1ff,
+        3 => (addr >> 12) & 0x1ff,
+        _other => 0,
     };
     r as usize
 }
-

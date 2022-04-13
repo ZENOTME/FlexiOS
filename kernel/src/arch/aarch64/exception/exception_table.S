@@ -148,6 +148,6 @@ set_exception_vector:
 	msr	vbar_el1, x0
 	ret
 
-eret_to_thread:
+eret_to_user:
 	mov sp,X0
 	exception_exit
